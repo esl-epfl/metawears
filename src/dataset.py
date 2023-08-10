@@ -13,11 +13,9 @@ from tqdm import tqdm
 import torch
 from utils.parser_util import get_parser
 
-torch.random.manual_seed(42)  # optional: for reproducibility
-
 GLOBAL_INFO = {}
 
-siena_info_df = pd.read_json('../../Siena/Siena_info.json')
+siena_info_df = pd.read_json('../input/Siena_info.json')
 args = get_parser().parse_args()
 
 
@@ -36,36 +34,11 @@ def search_walk(info):
     return searched_list
 
 
-def spectrogram_unfold_feature(signals):
-    nperseg = 250
-    noverlap = 50
-    freq_resolution = 2
-    nfft = args.sample_rate * freq_resolution
-    freqs, times, spec = stft(signals, fs=args.sample_rate, nperseg=nperseg, noverlap=noverlap, nfft=nfft,
-                              boundary=None, padded=False)
-
-    spec = spec[:, :spec.shape[1] - 1, :]
-    spec = np.reshape(spec, (-1, spec.shape[2]))
-    amp = (np.log(np.abs(spec) + 1e-10)).astype(np.float32)
-
-    return freqs, times, amp
-
-
 class TUHDataset(Dataset):
     def __init__(self, file_list, transform=None, selected_channel_id=-1, masking=True):
         self.file_list = file_list
         self.file_length = len(self.file_list)
         self.transform = transform
-        self.masking = masking
-        with open("../feasible_channels/feasible_8edges.json", 'r') as json_file:
-            self.all_feasible_channel_combination = json.load(json_file)
-        if selected_channel_id == -1:
-            self.selected_channels = None
-        else:
-            self.selected_channels = self.all_feasible_channel_combination[selected_channel_id]
-
-        print("Selected channels: ", self.selected_channels)
-
 
     def __len__(self):
         return self.file_length
@@ -74,53 +47,6 @@ class TUHDataset(Dataset):
         with open(self.file_list[idx], 'rb') as f:
             data_pkl = pickle.load(f)
             signals = np.asarray(data_pkl['STFT'])
-
-            if self.masking:
-                MASK = np.ones(20, dtype=np.bool)
-                # Create a list of indices
-                indices = np.arange(20)
-
-                if self.selected_channels == None:  # if the mask is not pre-assigned
-                    # Randomly shuffle the indices
-                    # TODO: get random permutation from the all_feasible_channel_combination
-                    indices = indices[np.random.permutation(20)]
-
-                    # Select the first 8 indices and assign 0 to the corresponding MASK elements
-                    MASK[indices[:8]] = 0
-                else:
-                    present_channels = self.selected_channels
-                    MASK[present_channels] = 0
-
-                signals[MASK] = -1  # Set all elements corresponding to True in MASK to -1
-
-                signals = np.reshape(signals, (-1, signals.shape[2]))
-                signals = self.transform(signals)
-
-            label = data_pkl['label']
-            label = 0. if label == "bckg" else 1.
-        return signals, label
-
-
-class TUHDatasetValidation(Dataset):
-    def __init__(self, file_list, transform=None):
-        self.file_list = file_list
-        self.file_length = len(self.file_list)
-        self.transform = transform
-        with open('../../TUSZv2/validation_file_mask8_dict.pkl', 'rb') as f:
-            self.file_mask_dict = pickle.load(f)
-
-    def __len__(self):
-        return self.file_length
-
-    def __getitem__(self, idx):
-        with open(self.file_list[idx], 'rb') as f:
-            data_pkl = pickle.load(f)
-            signals = np.asarray(data_pkl['STFT'])
-
-            filename = self.file_list[idx].split('/')[-1]
-            MASK = self.file_mask_dict[filename]
-
-            signals[MASK] = -1  # Set all elements corresponding to True in MASK to -1
 
             signals = np.reshape(signals, (-1, signals.shape[2]))
             signals = self.transform(signals)
@@ -130,143 +56,38 @@ class TUHDatasetValidation(Dataset):
         return signals, label
 
 
-class TUHDatasetEvent(Dataset):
-    def __init__(self, recording_list, transform=None):
-        self.recording_list = recording_list
-        self.transform = transform
+def get_data_loader(batch_size, save_dir=args.save_directory):
+    file_dir = os.path.join(save_dir, 'task-binary_datatype-eval_STFT')
 
-    def __len__(self):
-        return len(self.recording_list)
+    file_lists = {'bckg': [], 'seiz': []}
 
-    def __getitem__(self, idx):
-        filenames = self.recording_list[idx]
-        recording_signals = []
-        recording_labels = []
-        for filename in filenames:
-            with open(filename, 'rb') as f:
-                data_pkl = pickle.load(f)
-                signals = np.asarray(data_pkl['signals'])
-                if signals.shape != (20, 3072):
-                    print("Error in shape: ", signals.shape)
-
-                if args.eeg_type == 'stft':
-                    f, t, signals = spectrogram_unfold_feature(signals)
-                    # print(signals.shape)
-                    # exit()
-
-                signals = self.transform(signals)
-                recording_signals.append(signals)
-                label = data_pkl['label']
-                label = 0. if label == "bckg" else 1.
-                recording_labels.append(label)
-        return np.vstack(recording_signals), np.vstack(recording_labels)
-
-
-def separate_and_sort_filenames(filenames):
-    parts_dict = {}
+    filenames = os.listdir(file_dir)
     for filename in filenames:
-        key = filename.split('_label')[0]
-        index = int(filename.split('index_')[-1].split('.pkl')[0])
-        if key not in parts_dict:
-            parts_dict[key] = []
-        parts_dict[key].append((filename, index))
+        if 'bckg' in filename:
+            file_lists['bckg'].append(os.path.join(file_dir, filename))
+        elif 'seiz' in filename:
+            file_lists['seiz'].append(os.path.join(file_dir, filename))
+        else:
+            print('------------------------  error  ------------------------')
+            exit(-1)
 
-    sorted_lists = []
-    for key, value in parts_dict.items():
-        sorted_values = sorted(value, key=lambda x: x[1])
-        sorted_list = [filename for filename, index in sorted_values]
-        sorted_lists.append(sorted_list)
+    for classname in file_lists.keys():
+        print('{} num: {}'.format(classname, len(file_lists[classname])))
 
-    return sorted_lists
+    test_data = file_lists['bckg'] + file_lists['seiz']
 
-
-def get_data_loader(batch_size, save_dir=args.save_directory, event_base=False, random_mask=False,
-                    return_dataset=False, masking=True):
-    file_dir = {'train': os.path.join(save_dir, 'task-binary_datatype-train_STFT'),
-                'val': os.path.join(save_dir, 'task-binary_datatype-dev_STFT'),
-                'test': os.path.join(save_dir, 'task-binary_datatype-eval_STFT')}
-    file_lists = {'train': {'bckg': [], 'seiz': []}, 'val': {'bckg': [], 'seiz': []}, 'test': {'bckg': [], 'seiz': []}}
-
-    for dirname in file_dir.keys():
-        filenames = os.listdir(file_dir[dirname])
-        for filename in filenames:
-            if 'bckg' in filename:
-                file_lists[dirname]['bckg'].append(os.path.join(file_dir[dirname], filename))
-            elif 'seiz' in filename:
-                file_lists[dirname]['seiz'].append(os.path.join(file_dir[dirname], filename))
-            else:
-                print('------------------------  error  ------------------------')
-                exit(-1)
-
-    print('--------------------  file_lists  --------------------')
-    for dirname in file_lists.keys():
-        print('--------------------  {}'.format(dirname))
-        for classname in file_lists[dirname].keys():
-            print('{} num: {}'.format(classname, len(file_lists[dirname][classname])))
-
-    train_data = file_lists['train']['bckg'] + file_lists['train']['seiz'] * \
-                 int(len(file_lists['train']['bckg']) / len(file_lists['train']['seiz']))
-    non_seizure_labels = np.zeros(len(file_lists['train']['bckg']))
-    seizure_labels = np.ones(len(file_lists['train']['seiz']) *
-                             int(len(file_lists['train']['bckg']) / len(file_lists['train']['seiz'])))
-    train_label = np.concatenate((non_seizure_labels, seizure_labels))
-    print('len(train_data): {}'.format(len(train_data)))
-
-    val_data = file_lists['val']['bckg'] + file_lists['val']['seiz']
-    test_data = file_lists['test']['bckg'] + file_lists['test']['seiz']
-
-    val_label = np.concatenate((np.zeros(len(file_lists['val']['bckg'])),
-                                np.ones(len(file_lists['val']['seiz']))))
-    test_label = np.concatenate((np.zeros(len(file_lists['test']['bckg'])),
-                                 np.ones(len(file_lists['test']['seiz']))))
-
-    print('len(val_data): {}'.format(len(val_data)))
     print('len(test_data): {}'.format(len(test_data)))
-
-    train_transforms = transforms.Compose(
-        [
-            transforms.ToTensor(),
-        ]
-    )
-
-    val_transforms = transforms.Compose(
-        [
-            transforms.ToTensor(),
-        ]
-    )
 
     test_transforms = transforms.Compose(
         [
             transforms.ToTensor(),
         ]
     )
+    test_data = TUHDataset(test_data, transform=test_transforms)
 
-    if random_mask:
-        train_data = TUHDataset(train_data, transform=train_transforms, masking=masking)
-        if event_base:
-            val_data = TUHDatasetEvent(separate_and_sort_filenames(val_data), transform=val_transforms)
-            test_data = TUHDatasetEvent(separate_and_sort_filenames(test_data), transform=test_transforms)
-        else:
-            val_data = TUHDatasetValidation(val_data, transform=val_transforms)
-            test_data = TUHDataset(test_data, transform=test_transforms)
-    else:
-        # TODO: set selected channels based on json and the args.selected_channel_id
-        train_data = TUHDataset(train_data, transform=train_transforms, selected_channel_id=args.selected_channel_id,
-                                masking=masking)
-        val_data = TUHDataset(val_data, transform=val_transforms, selected_channel_id=args.selected_channel_id,
-                              masking=masking)
-        test_data = TUHDataset(test_data, transform=test_transforms, selected_channel_id=args.selected_channel_id,
-                               masking=masking)
+    test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=False, num_workers=6)
 
-    if return_dataset:
-        return train_data, val_data, test_data, train_label, val_label, test_label
-
-    else:
-        train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True, num_workers=6)
-        val_loader = DataLoader(dataset=val_data, batch_size=batch_size, shuffle=False, num_workers=6)
-        test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=False, num_workers=6)
-
-        return train_loader, val_loader, test_loader
+    return test_loader
 
 
 def _get_sample_frequency(signal_header):
