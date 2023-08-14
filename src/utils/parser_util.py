@@ -72,7 +72,7 @@ def get_parser():
     parser.add_argument('-nsVa', '--num_support_val',
                         type=int,
                         help='number of samples per class to use as support for validation, default=5',
-                        default=5)
+                        default=1)
 
     parser.add_argument('-nqVa', '--num_query_val',
                         type=int,

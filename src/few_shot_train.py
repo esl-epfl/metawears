@@ -19,6 +19,7 @@ from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, f1_
 
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 import torch
 import os
 from vit_pytorch.vit import ViT
@@ -259,7 +260,6 @@ def test(opt, test_dataloader, model):
     prototypes_all = []
 
     for x_support_set, y_support_set in zip(x_support_set_all, y_support_set_all):
-        print("Shape: ", x_support_set.shape)
         x_support_set = torch.tensor(x_support_set).to(device)
         y_support_set = torch.tensor(y_support_set).to(device)
 
@@ -286,19 +286,34 @@ def test(opt, test_dataloader, model):
     predict_prob = np.hstack(predict_prob)
     true_label = np.hstack(true_label)
 
-    best_th = thresh_max_f1(true_label, predict_prob)
-    test_predict_all = np.where(predict_prob > best_th, 1, 0)
-
     # Placeholder for results
     results = {
-        "accuracy": accuracy_score(true_label, test_predict_all),
-        "f1_score": f1_score(true_label, test_predict_all),
-        "auc": roc_auc_score(true_label, predict_prob),
-        "confusion_matrix": confusion_matrix(true_label, test_predict_all).tolist()
+        "seed": opt.manual_seed,
+        "num_support": opt.num_support_val,
+        "patients": opt.patients,
+        "excluded_patients": opt.excluded_patients,
+        "auc": roc_auc_score(true_label, predict_prob)
     }
-    print(results)
 
-    return
+    # Convert the results dictionary to a DataFrame
+    result_df = pd.DataFrame([results])
+
+    # Save results to a JSON file
+    output_filename = "../output/results/results.csv"
+
+    # Check if the file exists
+    try:
+        # Read the existing file
+        existing_df = pd.read_csv(output_filename)
+
+        # Append the new results to the existing DataFrame
+        updated_df = existing_df.append(result_df, ignore_index=True)
+
+        # Write the updated DataFrame back to the file
+        updated_df.to_csv(output_filename, index=False)
+    except FileNotFoundError:
+        # If the file doesn't exist, create a new file with the DataFrame
+        result_df.to_csv(output_filename, index=False)
 
 
 def eval():
@@ -313,7 +328,6 @@ def eval():
     init_seed(options)
     all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
     test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
-    print(test_patient_ids)
     test_dataloader = get_data_loader_siena(batch_size=2 * options.num_query_val,
                                             patient_ids=test_patient_ids,
                                             save_dir=options.siena_data_dir)

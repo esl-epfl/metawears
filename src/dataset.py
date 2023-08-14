@@ -132,7 +132,6 @@ def get_data_loader_siena(batch_size, patient_ids, save_dir=args.siena_data_dir)
     for filename in filenames:
         patient = int(filename[2:4])
         if patient not in patient_ids:
-            print("Patient is not in the target", filename)
             continue
         if 'bckg' in filename:
             file_lists['bckg'].append(os.path.join(file_dir, filename))
@@ -142,12 +141,7 @@ def get_data_loader_siena(batch_size, patient_ids, save_dir=args.siena_data_dir)
             print('------------------------  error  ------------------------')
             exit(-1)
 
-    for classname in file_lists.keys():
-        print('{} num: {}'.format(classname, len(file_lists[classname])))
-
     test_data = file_lists['bckg'] + file_lists['seiz']
-
-    print('len(test_data): {}'.format(len(test_data)))
 
     test_transforms = transforms.Compose(
         [
