@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore", category=UserWarning, message="Failed to load 
 
 from few_shot.prototypical_batch_sampler import PrototypicalBatchSampler
 from few_shot.prototypical_loss import prototypical_loss as loss_fn
-from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation
+from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
 from utils.parser_util import get_parser
 from dataset import get_data_loader, get_data_loader_siena
 from few_shot.support_set_const import seizure_support_set, non_seizure_support_set
@@ -110,6 +110,45 @@ def get_support_set(n_sample, data_dir):
                 labels.append(label)
 
     return np.array(support_set), np.array(labels)
+
+
+def get_support_set_per_patient(n_sample, data_dir, patient_ids):
+    support_set = []
+    labels = []
+    file_dir = os.path.join(data_dir, 'task-binary_datatype-eval_STFT')
+    for pat_id in patient_ids:
+        support_set_patient = []
+        labels_patient = []
+        file_lists = {'bckg': [], 'seiz': []}
+
+        filenames = os.listdir(file_dir)
+        for filename in filenames:
+            patient = int(filename[2:4])
+            if patient!=pat_id:
+                continue
+            if 'bckg' in filename:
+                file_lists['bckg'].append(os.path.join(file_dir, filename))
+            elif 'seiz' in filename:
+                file_lists['seiz'].append(os.path.join(file_dir, filename))
+            else:
+                print('------------------------  error  ------------------------')
+                exit(-1)
+
+
+        for label, class_support_set in enumerate([file_lists['bckg'], file_lists['seiz']]):
+            for filename in np.random.permutation(class_support_set)[:n_sample]:
+                filepath = os.path.join(data_dir + "/task-binary_datatype-eval_STFT/",
+                                        filename)
+                with open(filepath, 'rb') as f:
+                    data_pkl = pickle.load(f)
+                    signals = np.asarray(data_pkl['STFT'])
+                    support_set_patient.append(signals)
+                    labels_patient.append(label)
+
+        support_set.append(np.array(support_set_patient))
+        labels.append(np.array(labels_patient))
+
+    return support_set, labels
 
 
 def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None):
@@ -214,15 +253,21 @@ def test(opt, test_dataloader, model):
 
     model.eval()
 
-    x_support_set, y_support_set = get_support_set(opt.num_support_val, data_dir=opt.siena_data_dir)
-    x_support_set = torch.tensor(x_support_set).to(device)
-    y_support_set = torch.tensor(y_support_set).to(device)
+    x_support_set_all, y_support_set_all = get_support_set_per_patient(opt.num_support_val,
+                                                               data_dir=opt.siena_data_dir,
+                                                               patient_ids=opt.patients)
+    prototypes_all = []
 
-    x = x_support_set.reshape((x_support_set.shape[0], 1, -1, x_support_set.shape[3]))
-    model_output = model(x)
+    for x_support_set, y_support_set in zip(x_support_set_all, y_support_set_all):
+        print("Shape: ", x_support_set.shape)
+        x_support_set = torch.tensor(x_support_set).to(device)
+        y_support_set = torch.tensor(y_support_set).to(device)
 
-    prototypes = get_prototypes(model_output, target=y_support_set)
-    print("Prototypes", prototypes)
+        x = x_support_set.reshape((x_support_set.shape[0], 1, -1, x_support_set.shape[3]))
+        model_output = model(x)
+
+        prototypes = get_prototypes(model_output, target=y_support_set)
+        prototypes_all.append(prototypes)
 
     predict = []
     predict_prob = []
@@ -233,7 +278,7 @@ def test(opt, test_dataloader, model):
 
         x = x.reshape((x.shape[0], 1, -1, x.shape[3]))
         model_output = model(x)
-        prob, output = prototypical_evaluation(prototypes, model_output)
+        prob, output = prototypical_evaluation_per_patient(prototypes_all, model_output)
         predict.append(output.detach().cpu().numpy())
         predict_prob.append(prob.detach().cpu().numpy())
         true_label.append(y.detach().cpu().numpy())
@@ -266,8 +311,12 @@ def eval():
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
     init_seed(options)
-    test_dataloader = get_data_loader_siena(batch_size=2 * options.num_query_tr,
-                                save_dir=options.siena_data_dir)
+    all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
+    test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
+    print(test_patient_ids)
+    test_dataloader = get_data_loader_siena(batch_size=2 * options.num_query_val,
+                                            patient_ids=test_patient_ids,
+                                            save_dir=options.siena_data_dir)
     model = init_vit(options)
     model_path = os.path.join(options.experiment_root, 'best_model.pth')
     model.load_state_dict(torch.load(model_path))

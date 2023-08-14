@@ -72,17 +72,30 @@ def get_parser():
     parser.add_argument('-nsVa', '--num_support_val',
                         type=int,
                         help='number of samples per class to use as support for validation, default=5',
-                        default=6)
+                        default=5)
 
     parser.add_argument('-nqVa', '--num_query_val',
                         type=int,
                         help='number of samples per class to use as query for validation, default=15',
-                        default=6)
+                        default=1024)
 
     parser.add_argument('-seed', '--manual_seed',
                         type=int,
                         help='input for the manual seeds initializations',
-                        default=7)
+                        default=3)
+
+    # Add a new argument for a list of integers
+    parser.add_argument('--patients',
+                        type=int,
+                        nargs='+',  # '+' means one or more values
+                        help='patient IDs in the support set',
+                        required=True)
+
+    parser.add_argument('--excluded_patients',
+                        type=int,
+                        nargs='+',  # '+' means one or more values
+                        help='patient IDs excluded from the test set',
+                        default=-1)
 
     parser.add_argument('--cuda',
                         action='store_false',

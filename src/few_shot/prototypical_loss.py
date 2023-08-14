@@ -2,6 +2,7 @@
 import torch
 from torch.nn import functional as F
 from torch.nn.modules import Module
+import numpy as np
 
 
 class PrototypicalLoss(Module):
@@ -126,6 +127,34 @@ def  prototypical_evaluation(prototypes, inputs):
     y_prob = log_p_y[:, 1]
     return y_prob, y_hat
 
+
+
+def  prototypical_evaluation_per_patient(all_prototypes, inputs):
+    """
+    Inspired by https://github.com/jakesnell/prototypical-networks/blob/master/protonets/models/few_shot.py
+
+    Compute the barycentres by averaging the features of n_support
+    samples for each class in target, computes then the distances from each
+    samples' features to each one of the barycentres, computes the
+    log_probability for each n_query samples for each one of the current
+    classes, of appartaining to a class c, loss and accuracy are then computed
+    and returned
+    Args:
+    - input: the model output for a batch of samples
+    - target: ground truth for the above batch of samples
+    - n_support: number of samples to keep in account when computing
+      barycentres, for each one of the current classes
+    """
+    query_samples = inputs.to('cpu')
+
+    dists = torch.zeros((len(all_prototypes), query_samples.shape[0], 2))
+    for idx, prototypes in enumerate(all_prototypes):
+        dists[idx, :, :] = euclidean_dist(query_samples, prototypes)
+    dists_min = torch.min(dists, dim=0)[0]
+    log_p_y = F.softmax(-dists_min, dim=1)
+    y_hat = log_p_y.argmax(dim=1)
+    y_prob = log_p_y[:, 1]
+    return y_prob, y_hat
 
 
 

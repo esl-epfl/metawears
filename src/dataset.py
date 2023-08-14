@@ -123,13 +123,17 @@ def get_data_loader(batch_size, save_dir=args.TUSZ_data_dir):
     return train_data, val_data, test_data, train_label, val_label, test_label
 
 
-def get_data_loader_siena(batch_size, save_dir=args.siena_data_dir):
+def get_data_loader_siena(batch_size, patient_ids, save_dir=args.siena_data_dir):
     file_dir = os.path.join(save_dir, 'task-binary_datatype-eval_STFT')
 
     file_lists = {'bckg': [], 'seiz': []}
 
     filenames = os.listdir(file_dir)
     for filename in filenames:
+        patient = int(filename[2:4])
+        if patient not in patient_ids:
+            print("Patient is not in the target", filename)
+            continue
         if 'bckg' in filename:
             file_lists['bckg'].append(os.path.join(file_dir, filename))
         elif 'seiz' in filename:
