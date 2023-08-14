@@ -35,7 +35,7 @@ def search_walk(info):
 
 
 class TUHDataset(Dataset):
-    def __init__(self, file_list, transform=None, selected_channel_id=-1, masking=True):
+    def __init__(self, file_list, transform=None):
         self.file_list = file_list
         self.file_length = len(self.file_list)
         self.transform = transform
@@ -48,15 +48,82 @@ class TUHDataset(Dataset):
             data_pkl = pickle.load(f)
             signals = np.asarray(data_pkl['STFT'])
 
-            signals = np.reshape(signals, (-1, signals.shape[2]))
-            signals = self.transform(signals)
+            # signals = np.reshape(signals, (-1, signals.shape[2]))
+            # signals = self.transform(signals)
 
             label = data_pkl['label']
             label = 0. if label == "bckg" else 1.
         return signals, label
 
 
-def get_data_loader(batch_size, save_dir=args.save_directory):
+def get_data_loader(batch_size, save_dir=args.TUSZ_data_dir):
+    file_dir = {'train': os.path.join(save_dir, 'task-binary_datatype-train_STFT'),
+                'val': os.path.join(save_dir, 'task-binary_datatype-dev_STFT'),
+                'test': os.path.join(save_dir, 'task-binary_datatype-eval_STFT')}
+    file_lists = {'train': {'bckg': [], 'seiz': []}, 'val': {'bckg': [], 'seiz': []}, 'test': {'bckg': [], 'seiz': []}}
+
+    for dirname in file_dir.keys():
+        filenames = os.listdir(file_dir[dirname])
+        for filename in filenames:
+            if 'bckg' in filename:
+                file_lists[dirname]['bckg'].append(os.path.join(file_dir[dirname], filename))
+            elif 'seiz' in filename:
+                file_lists[dirname]['seiz'].append(os.path.join(file_dir[dirname], filename))
+            else:
+                print('------------------------  error  ------------------------')
+                exit(-1)
+
+    print('--------------------  file_lists  --------------------')
+    for dirname in file_lists.keys():
+        print('--------------------  {}'.format(dirname))
+        for classname in file_lists[dirname].keys():
+            print('{} num: {}'.format(classname, len(file_lists[dirname][classname])))
+
+    train_data = file_lists['train']['bckg'] + file_lists['train']['seiz'] * \
+                 int(len(file_lists['train']['bckg']) / len(file_lists['train']['seiz']))
+    non_seizure_labels = np.zeros(len(file_lists['train']['bckg']))
+    seizure_labels = np.ones(len(file_lists['train']['seiz']) *
+                             int(len(file_lists['train']['bckg']) / len(file_lists['train']['seiz'])))
+    train_label = np.concatenate((non_seizure_labels, seizure_labels))
+    print('len(train_data): {}'.format(len(train_data)))
+
+    val_data = file_lists['val']['bckg'] + file_lists['val']['seiz']
+    test_data = file_lists['test']['bckg'] + file_lists['test']['seiz']
+
+    val_label = np.concatenate((np.zeros(len(file_lists['val']['bckg'])),
+                                np.ones(len(file_lists['val']['seiz']))))
+    test_label = np.concatenate((np.zeros(len(file_lists['test']['bckg'])),
+                                 np.ones(len(file_lists['test']['seiz']))))
+
+    print('len(val_data): {}'.format(len(val_data)))
+    print('len(test_data): {}'.format(len(test_data)))
+
+    train_transforms = transforms.Compose(
+        [
+            transforms.ToTensor(),
+        ]
+    )
+
+    val_transforms = transforms.Compose(
+        [
+            transforms.ToTensor(),
+        ]
+    )
+
+    test_transforms = transforms.Compose(
+        [
+            transforms.ToTensor(),
+        ]
+    )
+
+    train_data = TUHDataset(train_data, transform=train_transforms)
+    val_data = TUHDataset(val_data, transform=val_transforms)
+    test_data = TUHDataset(test_data, transform=test_transforms)
+
+    return train_data, val_data, test_data, train_label, val_label, test_label
+
+
+def get_data_loader_siena(batch_size, save_dir=args.siena_data_dir):
     file_dir = os.path.join(save_dir, 'task-binary_datatype-eval_STFT')
 
     file_lists = {'bckg': [], 'seiz': []}
@@ -336,7 +403,7 @@ def make_STFT(args):
 
 def save_validation_inference():
     batch_size = 100
-    _, val_loader, test_loader = get_data_loader(batch_size)
+    _, val_loader, test_loader = get_data_loader_siena(batch_size)
     validation_file_mask_dict = {}
     for idx, (data, label, file, mask) in enumerate(tqdm(val_loader, desc='Validation ')):
         file_mask_dict = dict(zip(file, mask))

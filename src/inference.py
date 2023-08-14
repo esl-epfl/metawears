@@ -19,7 +19,7 @@ from scipy.signal import stft
 from tqdm import tqdm
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-from dataset import TUHDataset, get_data_loader
+from dataset import TUHDataset, get_data_loader_siena
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 from sklearn.metrics import confusion_matrix
@@ -41,7 +41,7 @@ seed_everything(seed=99)
 
 def test_sample_base():
     data_directory = '/home/amirshah/EPFL/EpilepsyTransformer/input/Siena/'
-    test_loader = get_data_loader(32, data_directory)
+    test_loader = get_data_loader_siena(32, data_directory)
 
     test_label_all = []
     test_prob_all = np.zeros(0, dtype=np.float)

@@ -10,10 +10,14 @@ def get_parser():
                         help='path to dataset',
                         default='..' + os.sep + 'dataset')
 
+    parser.add_argument('-tusz_data', '--TUSZ_data_dir',
+                        type=str,
+                        default='/home/amirshah/EPFL/EpilepsyTransformer/TUSZv2/preprocess')
+
     parser.add_argument('-exp', '--experiment_root',
                         type=str,
                         help='root where to store models, losses and accuracies',
-                        default='../output' + os.sep + 'output3')
+                        default='../output' + os.sep + 'few-shot')
 
     parser.add_argument('-data_root', '--data_root',
                         type=str,
@@ -23,7 +27,7 @@ def get_parser():
     parser.add_argument('-nep', '--epochs',
                         type=int,
                         help='number of epochs to train for',
-                        default=500)
+                        default=2000)
 
     parser.add_argument('-lr', '--learning_rate',
                         type=float,
@@ -43,7 +47,7 @@ def get_parser():
     parser.add_argument('-its', '--iterations',
                         type=int,
                         help='number of episodes per epoch, default=100',
-                        default=200)
+                        default=100)
 
     parser.add_argument('-cTr', '--classes_per_it_tr',
                         type=int,
@@ -53,12 +57,12 @@ def get_parser():
     parser.add_argument('-nsTr', '--num_support_tr',
                         type=int,
                         help='number of samples per class to use as support for training, default=5',
-                        default=25)
+                        default=5)
 
     parser.add_argument('-nqTr', '--num_query_tr',
                         type=int,
                         help='number of samples per class to use as query for training, default=5',
-                        default=25)
+                        default=5)
 
     parser.add_argument('-cVa', '--classes_per_it_val',
                         type=int,
@@ -68,12 +72,12 @@ def get_parser():
     parser.add_argument('-nsVa', '--num_support_val',
                         type=int,
                         help='number of samples per class to use as support for validation, default=5',
-                        default=25)
+                        default=6)
 
     parser.add_argument('-nqVa', '--num_query_val',
                         type=int,
                         help='number of samples per class to use as query for validation, default=15',
-                        default=25)
+                        default=6)
 
     parser.add_argument('-seed', '--manual_seed',
                         type=int,
@@ -86,8 +90,8 @@ def get_parser():
 
     parser.add_argument('--sample_rate', type=int, default=256)
     # parser.add_argument('--data_directory', type=str, default='/home/amirshah/EPFL/TUSZv2')
-    parser.add_argument('--data_directory', type=str, default='/home/amirshah/EPFL/physionet.org/files/siena-scalp-eeg/1.0.0')
-    parser.add_argument('--save_directory', type=str,
+    parser.add_argument('--siena_raw_data_directory', type=str, default='/home/amirshah/EPFL/physionet.org/files/siena-scalp-eeg/1.0.0')
+    parser.add_argument('--siena_data_dir', type=str,
                         default='/home/amirshah/EPFL/EpilepsyTransformer/input/Siena')
     parser.add_argument('--label_type', type=str, default='csv_bi')
     parser.add_argument('--cpu_num', type=int, default=4)
