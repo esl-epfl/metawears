@@ -155,6 +155,41 @@ def get_data_loader_siena(batch_size, patient_ids, save_dir=args.siena_data_dir)
     return test_loader
 
 
+def get_data_loader_siena_finetune(patient_ids, save_dir=args.siena_data_dir):
+    file_dir = os.path.join(save_dir, 'task-binary_datatype-eval_STFT')
+
+    file_lists = {'bckg': [], 'seiz': []}
+
+    filenames = os.listdir(file_dir)
+    for filename in filenames:
+        patient = int(filename[2:4])
+        if patient not in patient_ids:
+            continue
+        if 'bckg' in filename:
+            file_lists['bckg'].append(os.path.join(file_dir, filename))
+        elif 'seiz' in filename:
+            file_lists['seiz'].append(os.path.join(file_dir, filename))
+        else:
+            print('------------------------  error  ------------------------')
+            exit(-1)
+
+    train_data = file_lists['bckg'] + file_lists['seiz'] * \
+                 int(len(file_lists['bckg']) / len(file_lists['seiz']))
+    non_seizure_labels = np.zeros(len(file_lists['bckg']))
+    seizure_labels = np.ones(len(file_lists['seiz']) *
+                             int(len(file_lists['bckg']) / len(file_lists['seiz'])))
+    train_label = np.concatenate((non_seizure_labels, seizure_labels))
+
+    train_transforms = transforms.Compose(
+        [
+            transforms.ToTensor(),
+        ]
+    )
+    train_data = TUHDataset(train_data, transform=train_transforms)
+
+    return train_data, train_label
+
+
 def _get_sample_frequency(signal_header):
     # Temporary conditional assignment while we deprecate 'sample_rate' as a channel attribute
     # in favor of 'sample_frequency', supporting the use of either to give

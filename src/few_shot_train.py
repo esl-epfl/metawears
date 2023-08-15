@@ -11,7 +11,7 @@ from few_shot.prototypical_batch_sampler import PrototypicalBatchSampler
 from few_shot.prototypical_loss import prototypical_loss as loss_fn
 from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
 from utils.parser_util import get_parser
-from dataset import get_data_loader, get_data_loader_siena
+from dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
 from few_shot.support_set_const import seizure_support_set, non_seizure_support_set
 from few_shot.support_set_const import seizure_support_set_siena, non_seizure_support_set_siena
 from utils.utils import thresh_max_f1
@@ -39,10 +39,10 @@ def init_seed(opt):
 def init_sampler(opt, labels, mode):
     if 'train' in mode:
         classes_per_it = opt.classes_per_it_tr
-        num_samples = opt.num_query_tr
+        num_samples = opt.num_support_tr + opt.num_query_tr
     else:
         classes_per_it = opt.classes_per_it_val
-        num_samples = opt.num_query_val
+        num_samples = opt.num_support_val + opt.num_query_val
 
     return PrototypicalBatchSampler(labels=labels,
                                     classes_per_it=classes_per_it,
@@ -74,12 +74,12 @@ def init_vit(opt):
     return model
 
 
-def init_optim(opt, model):
+def init_optim(opt, model, ratio=1.0):
     '''
     Initialize optimizer
     '''
     return torch.optim.Adam(params=model.parameters(),
-                            lr=opt.learning_rate)
+                            lr=opt.learning_rate * ratio)
 
 
 def init_lr_scheduler(opt, optim):
@@ -152,7 +152,7 @@ def get_support_set_per_patient(n_sample, data_dir, patient_ids):
     return support_set, labels
 
 
-def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None):
+def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, exp_root=None):
     '''
     Train the model with the prototypical learning algorithm
     '''
@@ -168,23 +168,33 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None):
     val_acc_total = []
     best_acc = 0
 
-    best_model_path = os.path.join(opt.experiment_root, 'best_model.pth')
-    last_model_path = os.path.join(opt.experiment_root, 'last_model.pth')
+    if exp_root is None:
+        exp_root = opt.experiment_root
+    best_model_path = os.path.join(exp_root, 'best_model.pth')
+    last_model_path = os.path.join(exp_root, 'last_model.pth')
 
     for epoch in range(opt.epochs):
         train_loss = []
         train_acc = []
         val_loss = []
         val_acc = []
-        x_support_set, y_support_set = get_support_set(opt.num_support_tr, opt.TUSZ_data_dir)
-        x_support_set = torch.tensor(x_support_set).to(device)
-        y_support_set = torch.tensor(y_support_set).to(device)
+        # x_support_set, y_support_set = get_support_set(opt.num_support_tr, opt.TUSZ_data_dir)
+        # x_support_set = torch.tensor(x_support_set).to(device)
+        # y_support_set = torch.tensor(y_support_set).to(device)
         print('=== Epoch: {} ==='.format(epoch))
         tr_iter = iter(tr_dataloader)
         model.train()
         for batch in tqdm(tr_iter):
             optim.zero_grad()
-            x_query_set, y_query_set = batch
+            x_batch, y_batch = batch
+            x_support_set = torch.concatenate((x_batch[:opt.num_support_tr], x_batch[2*opt.num_support_tr:3*opt.num_support_tr]))
+            y_support_set = torch.concatenate((y_batch[:opt.num_support_tr], y_batch[2*opt.num_support_tr:3*opt.num_support_tr]))
+
+            x_query_set = torch.concatenate((x_batch[opt.num_support_tr:2*opt.num_support_tr], x_batch[3*opt.num_support_tr:]))
+            y_query_set =torch.concatenate((y_batch[opt.num_support_tr:2*opt.num_support_tr], y_batch[3*opt.num_support_tr:]))
+
+            x_support_set = x_support_set.clone().detach().to(device)
+            y_support_set = y_support_set.clone().detach().to(device)
             x_query_set, y_query_set = x_query_set.to(device), y_query_set.to(device)
 
             x = torch.concatenate((x_support_set, x_query_set))
@@ -210,7 +220,19 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None):
         val_iter = iter(val_dataloader)
         model.eval()
         for batch in val_iter:
-            x_query_set, y_query_set = batch
+            x_batch, y_batch = batch
+            x_support_set = torch.concatenate(
+                (x_batch[:opt.num_support_tr], x_batch[2 * opt.num_support_tr:3 * opt.num_support_tr]))
+            y_support_set = torch.concatenate(
+                (y_batch[:opt.num_support_tr], y_batch[2 * opt.num_support_tr:3 * opt.num_support_tr]))
+
+            x_query_set = torch.concatenate(
+                (x_batch[opt.num_support_tr:2 * opt.num_support_tr], x_batch[3 * opt.num_support_tr:]))
+            y_query_set = torch.concatenate(
+                (y_batch[opt.num_support_tr:2 * opt.num_support_tr], y_batch[3 * opt.num_support_tr:]))
+
+            x_support_set = x_support_set.clone().detach().to(device)
+            y_support_set = y_support_set.clone().detach().to(device)
             x_query_set, y_query_set = x_query_set.to(device), y_query_set.to(device)
 
             x = torch.concatenate((x_support_set, x_query_set))
@@ -291,6 +313,7 @@ def test(opt, test_dataloader, model):
         "seed": opt.manual_seed,
         "num_support": opt.num_support_val,
         "patients": opt.patients,
+        "finetune_patients": opt.finetune_patients,
         "excluded_patients": opt.excluded_patients,
         "auc": roc_auc_score(true_label, predict_prob)
     }
@@ -299,7 +322,7 @@ def test(opt, test_dataloader, model):
     result_df = pd.DataFrame([results])
 
     # Save results to a JSON file
-    output_filename = "../output/results/results.csv"
+    output_filename = "../output/results/results_meta_transfer.csv"
 
     # Check if the file exists
     try:
@@ -316,23 +339,20 @@ def test(opt, test_dataloader, model):
         result_df.to_csv(output_filename, index=False)
 
 
-def eval():
+def eval(options):
     """
     Initialize everything and train
     """
-    options = get_parser().parse_args()
-
-    if torch.cuda.is_available() and not options.cuda:
-        print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
     init_seed(options)
     all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
     test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
-    test_dataloader = get_data_loader_siena(batch_size=2 * options.num_query_val,
+    test_dataloader = get_data_loader_siena(batch_size=options.num_query_val,
                                             patient_ids=test_patient_ids,
                                             save_dir=options.siena_data_dir)
     model = init_vit(options)
-    model_path = os.path.join(options.experiment_root, 'best_model.pth')
+    exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
+    model_path = os.path.join(exp_root, 'last_model.pth')
     model.load_state_dict(torch.load(model_path))
 
     test(opt=options,
@@ -367,6 +387,41 @@ def main():
     best_state, best_acc, train_loss, train_acc, val_loss, val_acc = res
 
 
+def finetune(options):
+    """
+    Initialize everything and train
+    """
+    exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
+    if not os.path.exists(exp_root):
+        os.makedirs(exp_root)
+
+    init_seed(options)
+    tr_dataset, tr_label = get_data_loader_siena_finetune(patient_ids=options.finetune_patients,
+                                            save_dir=options.siena_data_dir)
+
+    tr_sampler = init_sampler(options, tr_label, mode="train")
+    tr_dataloader = torch.utils.data.DataLoader(tr_dataset, batch_sampler=tr_sampler, num_workers=6)
+    model = init_vit(options)
+    model_path = os.path.join(options.base_learner_root, 'best_model.pth')
+    model.load_state_dict(torch.load(model_path))
+    optim = init_optim(options, model, ratio=0.02)
+    lr_scheduler = init_lr_scheduler(options, optim)
+    train(opt=options,
+          tr_dataloader=tr_dataloader,
+          val_dataloader=None,
+          model=model,
+          optim=optim,
+          lr_scheduler=lr_scheduler,
+          exp_root=exp_root)
+
+
 if __name__ == '__main__':
+    options = get_parser().parse_args()
+    if torch.cuda.is_available() and not options.cuda:
+        print("WARNING: You have a CUDA device, so you should probably run with --cuda")
     # main()
-    eval()
+
+    if options.finetune:
+        finetune(options)
+    else:
+        eval(options)

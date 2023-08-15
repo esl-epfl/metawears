@@ -17,7 +17,14 @@ def get_parser():
     parser.add_argument('-exp', '--experiment_root',
                         type=str,
                         help='root where to store models, losses and accuracies',
-                        default='../output' + os.sep + 'few-shot')
+                        default='../output' + os.sep + 'finetuned')
+
+    parser.add_argument('-baselearner', '--base_learner_root',
+                        type=str,
+                        help='root where to load pre-trained models',
+                        default='../output' + os.sep + 'random_support')
+
+    parser.add_argument('--finetune', action='store_true', help='enables global model')
 
     parser.add_argument('-data_root', '--data_root',
                         type=str,
@@ -27,7 +34,7 @@ def get_parser():
     parser.add_argument('-nep', '--epochs',
                         type=int,
                         help='number of epochs to train for',
-                        default=2000)
+                        default=2)
 
     parser.add_argument('-lr', '--learning_rate',
                         type=float,
@@ -72,7 +79,7 @@ def get_parser():
     parser.add_argument('-nsVa', '--num_support_val',
                         type=int,
                         help='number of samples per class to use as support for validation, default=5',
-                        default=1)
+                        default=5)
 
     parser.add_argument('-nqVa', '--num_query_val',
                         type=int,
@@ -89,9 +96,15 @@ def get_parser():
                         type=int,
                         nargs='+',  # '+' means one or more values
                         help='patient IDs in the support set',
-                        required=True)
+                        default=0)
 
     parser.add_argument('--excluded_patients',
+                        type=int,
+                        nargs='+',  # '+' means one or more values
+                        help='patient IDs excluded from the test set',
+                        default=-1)
+
+    parser.add_argument('--finetune_patients',
                         type=int,
                         nargs='+',  # '+' means one or more values
                         help='patient IDs excluded from the test set',
