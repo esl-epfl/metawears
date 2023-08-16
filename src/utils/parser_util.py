@@ -25,6 +25,8 @@ def get_parser():
                         default='../output' + os.sep + 'random_support')
 
     parser.add_argument('--finetune', action='store_true', help='enables global model')
+    parser.add_argument('--skip_base_learner', action='store_true', help='meta-train on Siena from scratch')
+    parser.add_argument('--skip_finetune', action='store_true', help='Skips meta-train to do case 3')
 
     parser.add_argument('-data_root', '--data_root',
                         type=str,

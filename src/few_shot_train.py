@@ -351,8 +351,12 @@ def eval(options):
                                             patient_ids=test_patient_ids,
                                             save_dir=options.siena_data_dir)
     model = init_vit(options)
-    exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
-    model_path = os.path.join(exp_root, 'last_model.pth')
+    if options.skip_finetune:
+        exp_root = options.base_learner_root
+        model_path = os.path.join(exp_root, 'best_model.pth')
+    else:
+        exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
+        model_path = os.path.join(exp_root, 'last_model.pth')
     model.load_state_dict(torch.load(model_path))
 
     test(opt=options,
@@ -402,9 +406,12 @@ def finetune(options):
     tr_sampler = init_sampler(options, tr_label, mode="train")
     tr_dataloader = torch.utils.data.DataLoader(tr_dataset, batch_sampler=tr_sampler, num_workers=6)
     model = init_vit(options)
-    model_path = os.path.join(options.base_learner_root, 'best_model.pth')
-    model.load_state_dict(torch.load(model_path))
-    optim = init_optim(options, model, ratio=0.02)
+    if not options.skip_base_learner:
+        model_path = os.path.join(options.base_learner_root, 'best_model.pth')
+        model.load_state_dict(torch.load(model_path))
+        optim = init_optim(options, model, ratio=0.02)
+    else:
+        optim = init_optim(options, model)
     lr_scheduler = init_lr_scheduler(options, optim)
     train(opt=options,
           tr_dataloader=tr_dataloader,
