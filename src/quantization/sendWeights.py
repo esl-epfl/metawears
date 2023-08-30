@@ -7,6 +7,14 @@ from utils.parser_util import get_parser
 from einops.layers.torch import Rearrange
 import os
 from few_shot_train import init_vit
+from torch.utils.data import DataLoader
+from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
+from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, f1_score
+import time
+from tqdm import tqdm
+import numpy as np
+from few_shot_train import get_support_set_per_patient, init_seed
+
 
 
 dim = 16
@@ -51,16 +59,15 @@ class ViTInferenceNet(nn.Module):
           self.quant = QuantStub()
           self.dequant = DeQuantStub()
 
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
-        fake_input = torch.zeros((2, 1, 121, 400))
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.q:
-          x = self.quant(fake_input)
-        x = self.layer_norm_patch1(fake_input.squeeze())
-        x = self.embedding(x)
-        x = self.layer_norm_patch2(x)
-        x = self.dropout_patch(x)
+          x = self.quant(x.squeeze())
+        # x = self.layer_norm_patch1(fake_input.squeeze())
+        # x = self.embedding(x)
+        # x = self.layer_norm_patch2(x)
+        # x = self.dropout_patch(x)
 
-        for modules in self.layers[:3]:
+        for modules in self.layers[:]:
             ln_out = modules[0](x)  # LayerNorm
             mha_out, _ = modules[1](ln_out, ln_out, ln_out)  # MultiHeadAttention
             projection = modules[2](mha_out)    # Projection + dropout
@@ -74,29 +81,6 @@ class ViTInferenceNet(nn.Module):
             dropout2 = modules[8](ff2_out)  # Dropout 2
             x = self.ff.add(x, dropout2)
 
-        modules = self.layers[3]
-
-        ln_out = modules[0](x)  # LayerNorm
-        ln_out = x_in.squeeze()
-        mha_out, _ = modules[1](ln_out, ln_out, ln_out)  # MultiHeadAttention
-        # projection = modules[2](mha_out)  # Projection + dropout
-        x = self.ff.add(x, mha_out)
-
-        ln_out = modules[3](x)  # LayerNorm
-
-        ff1_out = modules[4](ln_out)  # Feed Forward 1
-
-        gelu = modules[5](ff1_out)  # GELU
-
-        dropout1 = modules[6](gelu)  # Dropout 1
-
-        ff2_out = modules[7](dropout1)  # Feed Forward 2
-        dropout2 = modules[8](ff2_out)  # Dropout 2
-        print("Shape", x_in.shape, dropout2.shape, x.shape)
-        x = self.ff.add(x, dropout2)
-
-
-
         x = x[:, 0, :]
         x = self.to_latent(x)
 
@@ -104,16 +88,16 @@ class ViTInferenceNet(nn.Module):
         if self.q:
           x = self.dequant(x)
 
-        return mha_out
+        return x
 
 
-rearrange = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = 80, p2 = 5)
+# rearrange = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = 80, p2 = 5)
 
 net = ViTInferenceNet(q=False)
 # print(torchsummary.summary(net, (1, 121, 400), batch_size=-1, device='cpu'))
 
 options = get_parser().parse_args()
-
+init_seed(options)
 
 def get_trained_model():
     exp_root = options.base_learner_root
@@ -124,29 +108,29 @@ def get_trained_model():
 
 
 def send_weights(source_model, target_model):
-    mapping_layer_name_weight_bias = {
-        "to_patch_embedding.1": "layer_norm_patch1",
-        "to_patch_embedding.2": "embedding",
-        "to_patch_embedding.3": "layer_norm_patch2",
-        "transformer.layers.{}.0.norm": "layers.{}.0",
-        "transformer.layers.{}.0.fn.to_out.0": "layers.{}.1.out_proj",
-        "transformer.layers.{}.1.norm": "layers.{}.3",
-        "transformer.layers.{}.1.fn.net.0": "layers.{}.4",
-        "transformer.layers.{}.1.fn.net.3": "layers.{}.7",
-        "mlp_head.0": "mlp_head.0",
-        "mlp_head.1": "mlp_head.1"
-    }
-    mapping_layer_name_weight ={
-        "transformer.layers.{}.0.fn.to_qkv.weight": "layers.{}.1.in_proj_weight",
-    }
+    # mapping_layer_name_weight_bias = {
+    #     "to_patch_embedding.1": "layer_norm_patch1",
+    #     "to_patch_embedding.2": "embedding",
+    #     "to_patch_embedding.3": "layer_norm_patch2",
+    #     "transformer.layers.{}.0.norm": "layers.{}.0",
+    #     "transformer.layers.{}.0.fn.to_out.0": "layers.{}.1.out_proj",
+    #     "transformer.layers.{}.1.norm": "layers.{}.3",
+    #     "transformer.layers.{}.1.fn.net.0": "layers.{}.4",
+    #     "transformer.layers.{}.1.fn.net.3": "layers.{}.7",
+    #     "mlp_head.0": "mlp_head.0",
+    #     "mlp_head.1": "mlp_head.1"
+    # }
+    # mapping_layer_name_weight ={
+    #     "transformer.layers.{}.0.fn.to_qkv.weight": "layers.{}.1.in_proj_weight",
+    # }
 
-    params1 = source_model.named_parameters()
-    params2 = target_model.named_parameters()
-
-    dict_params_source = dict(params1)
-    dict_params_target = dict(params2)
-
-    modified_parameters = {key: False for key in dict_params_target.keys()}
+    # params1 = source_model.named_parameters()
+    # params2 = target_model.named_parameters()
+    #
+    # dict_params_source = dict(params1)
+    # dict_params_target = dict(params2)
+    #
+    # modified_parameters = {key: False for key in dict_params_target.keys()}
 
     target_model.mlp_head[0].weight.data = source_model.mlp_head[0].weight
     target_model.mlp_head[0].bias.data = source_model.mlp_head[0].bias
@@ -175,13 +159,13 @@ def send_weights(source_model, target_model):
 
         target_model.layers[l][1].in_proj_weight.data = source_model.transformer.layers[l][0].fn.to_qkv.weight
         target_model.layers[l][1].in_proj_bias.data = torch.zeros(48)
-
-    for param1_key in dict_params_source.keys():
-        print(param1_key, dict_params_source[param1_key].shape, dict_params_source[param1_key].mean())
-
-    print('*'*50)
-    for param2_key in dict_params_target.keys():
-        print(param2_key, dict_params_target[param2_key].shape, dict_params_target[param2_key].mean())
+    #
+    # for param1_key in dict_params_source.keys():
+    #     print(param1_key, dict_params_source[param1_key].shape, dict_params_source[param1_key].mean())
+    #
+    # print('*'*50)
+    # for param2_key in dict_params_target.keys():
+    #     print(param2_key, dict_params_target[param2_key].shape, dict_params_target[param2_key].mean())
     return
 
 
@@ -198,28 +182,89 @@ def main():
     model.eval()
     net.eval()
     send_weights(model, net)
-    print(model)
-    print(net)
+    # print(model)
+    # print(net)
     # model.transformer.register_forward_hook(get_activation('attention_out'))
-    model.transformer.layers[3][0].norm.register_forward_hook(get_activation('ff_out'))
-    model.transformer.layers[3][0].register_forward_hook(get_activation('do_out'))
+    model.dropout.register_forward_hook(get_activation('transformer_input'))
+    # model.transformer.layers[3][0].register_forward_hook(get_activation('do_out'))
     source_output = model(torch.rand((2, 1, 3200, 15)))
-    print(activation['ff_out'].shape, activation['ff_out'])
 
     # net.layers[3][3].register_forward_hook((get_activation('net_norm_out')))
-    target_output = net(activation['ff_out'])
-    print("Net do out", target_output.shape, target_output)
-    print("Source do out",  activation['do_out'].shape,  activation['do_out'])
-
-
-
+    target_output = net(activation['transformer_input'])
     print("Error", torch.sum(torch.abs(target_output - source_output)))
 
+
+
+    all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
+    test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
+    test_dataloader = get_data_loader_siena(batch_size=32, patient_ids=test_patient_ids, save_dir=options.siena_data_dir)
+    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
+
+
+
+
+def test(opt, test_dataloader, model, print_results=False, target_model = None):
+    """
+    Test the model trained with the prototypical learning algorithm
+    """
+    device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
+    start_time = time.time()
+
+    model.eval()
+
+    x_support_set_all, y_support_set_all = get_support_set_per_patient(opt.num_support_val,
+                                                               data_dir=opt.siena_data_dir,
+                                                               patient_ids=opt.patients)
+    prototypes_all = []
+
+    for x_support_set, y_support_set in zip(x_support_set_all, y_support_set_all):
+        x_support_set = torch.tensor(x_support_set).to(device)
+        y_support_set = torch.tensor(y_support_set).to(device)
+
+        x = x_support_set.reshape((x_support_set.shape[0], 1, -1, x_support_set.shape[3]))
+        model_output = model(x)
+        prototypes = get_prototypes(model_output, target=y_support_set)
+        prototypes_all.append(prototypes)
+
+    predict = []
+    predict_prob = []
+    true_label = []
+    for batch in tqdm(test_dataloader):
+        x, y = batch
+        x, y = x.to(device), y.to(device)
+
+        x = x.reshape((x.shape[0], 1, -1, x.shape[3]))
+        model_output = model(x)
+        if target_model is not None:
+            transformer_input = activation['transformer_input']
+            model_output = target_model(transformer_input)
+
+        prob, output = prototypical_evaluation_per_patient(prototypes_all, model_output)
+        predict.append(output.detach().cpu().numpy())
+        predict_prob.append(prob.detach().cpu().numpy())
+        true_label.append(y.detach().cpu().numpy())
+    predict = np.hstack(predict)
+    predict_prob = np.hstack(predict_prob)
+    true_label = np.hstack(true_label)
+
+    # Placeholder for results
+    results = {
+        "seed": opt.manual_seed,
+        "num_support": opt.num_support_val,
+        "skip_base_learner": opt.skip_base_learner,
+        "skip_finetune": opt.skip_finetune,
+        "patients": opt.patients,
+        "finetune_patients": opt.finetune_patients,
+        "excluded_patients": opt.excluded_patients,
+        "auc": roc_auc_score(true_label, predict_prob)
+    }
+
+    if print_results:
+        print(results)
 
 if __name__ == '__main__':
     main()
 
-test_dataloader = get_data_loader_siena(batch_size=32, patient_ids=[0], save_dir=options.siena_data_dir)
 
 
 # x, y = next(iter(test_dataloader))
