@@ -16,7 +16,6 @@ import numpy as np
 from few_shot_train import get_support_set_per_patient, init_seed
 
 
-
 dim = 16
 q_dim = 4
 n_heads = 4
@@ -91,13 +90,9 @@ class ViTInferenceNet(nn.Module):
         return x
 
 
-# rearrange = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = 80, p2 = 5)
-
-net = ViTInferenceNet(q=False)
-# print(torchsummary.summary(net, (1, 121, 400), batch_size=-1, device='cpu'))
-
 options = get_parser().parse_args()
 init_seed(options)
+
 
 def get_trained_model():
     exp_root = options.base_learner_root
@@ -108,30 +103,6 @@ def get_trained_model():
 
 
 def send_weights(source_model, target_model):
-    # mapping_layer_name_weight_bias = {
-    #     "to_patch_embedding.1": "layer_norm_patch1",
-    #     "to_patch_embedding.2": "embedding",
-    #     "to_patch_embedding.3": "layer_norm_patch2",
-    #     "transformer.layers.{}.0.norm": "layers.{}.0",
-    #     "transformer.layers.{}.0.fn.to_out.0": "layers.{}.1.out_proj",
-    #     "transformer.layers.{}.1.norm": "layers.{}.3",
-    #     "transformer.layers.{}.1.fn.net.0": "layers.{}.4",
-    #     "transformer.layers.{}.1.fn.net.3": "layers.{}.7",
-    #     "mlp_head.0": "mlp_head.0",
-    #     "mlp_head.1": "mlp_head.1"
-    # }
-    # mapping_layer_name_weight ={
-    #     "transformer.layers.{}.0.fn.to_qkv.weight": "layers.{}.1.in_proj_weight",
-    # }
-
-    # params1 = source_model.named_parameters()
-    # params2 = target_model.named_parameters()
-    #
-    # dict_params_source = dict(params1)
-    # dict_params_target = dict(params2)
-    #
-    # modified_parameters = {key: False for key in dict_params_target.keys()}
-
     target_model.mlp_head[0].weight.data = source_model.mlp_head[0].weight
     target_model.mlp_head[0].bias.data = source_model.mlp_head[0].bias
 
@@ -178,29 +149,33 @@ def get_activation(name):
 
 def main():
     model = get_trained_model()
+    net = ViTInferenceNet(q=True)
     print(torchsummary.summary(model.cpu(), (1, 3200, 15), batch_size=-1, device='cpu'))
     model.eval()
     net.eval()
     send_weights(model, net)
-    # print(model)
-    # print(net)
-    # model.transformer.register_forward_hook(get_activation('attention_out'))
-    model.dropout.register_forward_hook(get_activation('transformer_input'))
-    # model.transformer.layers[3][0].register_forward_hook(get_activation('do_out'))
-    source_output = model(torch.rand((2, 1, 3200, 15)))
-
-    # net.layers[3][3].register_forward_hook((get_activation('net_norm_out')))
+    hook = model.dropout.register_forward_hook(get_activation('transformer_input'))
+    source_output = model(torch.rand((32, 1, 3200, 15)))
     target_output = net(activation['transformer_input'])
     print("Error", torch.sum(torch.abs(target_output - source_output)))
-
-
+    hook.remove()
 
     all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
     test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
     test_dataloader = get_data_loader_siena(batch_size=32, patient_ids=test_patient_ids, save_dir=options.siena_data_dir)
+    train_dataloader = get_data_loader_siena(batch_size=32, patient_ids=options.patients, save_dir=options.siena_data_dir)
     test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
 
+    net.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+    torch.ao.quantization.prepare(net, inplace=True)
+    print('Post Training Quantization Prepare: Inserting Observers')
 
+    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
+    print('Post Training Quantization: Calibration done')
+    torch.ao.quantization.convert(net, inplace=True)
+    print('Post Training Quantization: Convert done')
+    print('\n Conv1: After fusion and quantization \n\n', net.layers[3][1])
+    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
 
 
 def test(opt, test_dataloader, model, print_results=False, target_model = None):
@@ -217,32 +192,44 @@ def test(opt, test_dataloader, model, print_results=False, target_model = None):
                                                                patient_ids=opt.patients)
     prototypes_all = []
 
+    hook = model.dropout.register_forward_hook(get_activation('transformer_input'))
     for x_support_set, y_support_set in zip(x_support_set_all, y_support_set_all):
         x_support_set = torch.tensor(x_support_set).to(device)
         y_support_set = torch.tensor(y_support_set).to(device)
 
         x = x_support_set.reshape((x_support_set.shape[0], 1, -1, x_support_set.shape[3]))
         model_output = model(x)
+        if target_model is not None:
+            transformer_input = activation['transformer_input']
+            model_output = target_model(transformer_input)
         prototypes = get_prototypes(model_output, target=y_support_set)
+        print("Prototypes", prototypes)
         prototypes_all.append(prototypes)
 
+    hook.remove()
     predict = []
     predict_prob = []
     true_label = []
-    for batch in tqdm(test_dataloader):
+    hook = model.dropout.register_forward_hook(get_activation('transformer_input'))
+    for i, batch in tqdm(enumerate(test_dataloader)):
         x, y = batch
         x, y = x.to(device), y.to(device)
 
         x = x.reshape((x.shape[0], 1, -1, x.shape[3]))
+
         model_output = model(x)
+        # print("Source model output", model_output.shape, model_output)
         if target_model is not None:
+            # print("Activation", activation['transformer_input'])
             transformer_input = activation['transformer_input']
             model_output = target_model(transformer_input)
+            # print("Target model output", model_output.shape, model_output)
 
         prob, output = prototypical_evaluation_per_patient(prototypes_all, model_output)
         predict.append(output.detach().cpu().numpy())
         predict_prob.append(prob.detach().cpu().numpy())
         true_label.append(y.detach().cpu().numpy())
+    hook.remove()
     predict = np.hstack(predict)
     predict_prob = np.hstack(predict_prob)
     true_label = np.hstack(true_label)
@@ -261,6 +248,7 @@ def test(opt, test_dataloader, model, print_results=False, target_model = None):
 
     if print_results:
         print(results)
+
 
 if __name__ == '__main__':
     main()
