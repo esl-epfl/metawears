@@ -4,6 +4,7 @@ import torch.nn as nn
 from sendWeights import get_trained_model
 from einops import rearrange, repeat
 from FixedPointViT import FixedPointViT
+from FixedPointViT import CLIP_VAL, FRACTION_BITS
 import matplotlib.pyplot as plt
 from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, f1_score
@@ -18,9 +19,8 @@ options = get_parser().parse_args()
 init_seed(options)
 device = 'cuda:0' if torch.cuda.is_available() and options.cuda else 'cpu'
 
-CLIP_VAL = 1
-FRACTION_BITS = 6
 total_weights = torch.zeros(0).to(device)
+total_activation = torch.zeros(0).to(device)
 
 
 def make_fxp(source_weight):
@@ -30,7 +30,7 @@ def make_fxp(source_weight):
     target_weight = torch.where(target_weight < -CLIP_VAL,  -CLIP_VAL, target_weight)
     target_weight *= (2**FRACTION_BITS)
     target_weight = target_weight.to(torch.int)
-    total_weights = torch.cat((total_weights, target_weight.flatten()))
+    # total_weights = torch.cat((total_weights, target_weight.flatten()))
     return target_weight.to(torch.float) / (2**FRACTION_BITS)
 
 
@@ -56,20 +56,20 @@ def send_weights(source_model, target_model):
         target_model.transformer.layers[l][0].norm.weight.data = make_fxp(
             source_model.transformer.layers[l][0].norm.weight)
         target_model.transformer.layers[l][0].norm.bias.data = make_fxp(source_model.transformer.layers[l][0].norm.bias)
-        target_model.transformer.layers[l][0].fn.to_out[0].weight.data = make_fxp(
+        target_model.transformer.layers[l][0].fn.projection.weight.data = make_fxp(
             source_model.transformer.layers[l][0].fn.to_out[0].weight)
-        target_model.transformer.layers[l][0].fn.to_out[0].bias.data = make_fxp(
+        target_model.transformer.layers[l][0].fn.projection.bias.data = make_fxp(
             source_model.transformer.layers[l][0].fn.to_out[0].bias)
         target_model.transformer.layers[l][1].norm.weight.data = make_fxp(
             source_model.transformer.layers[l][1].norm.weight)
         target_model.transformer.layers[l][1].norm.bias.data = make_fxp(source_model.transformer.layers[l][1].norm.bias)
-        target_model.transformer.layers[l][1].fn.net[0].weight.data = make_fxp(
+        target_model.transformer.layers[l][1].fn.ff1.weight.data = make_fxp(
             source_model.transformer.layers[l][1].fn.net[0].weight)
-        target_model.transformer.layers[l][1].fn.net[0].bias.data = make_fxp(
+        target_model.transformer.layers[l][1].fn.ff1.bias.data = make_fxp(
             source_model.transformer.layers[l][1].fn.net[0].bias)
-        target_model.transformer.layers[l][1].fn.net[3].weight.data = make_fxp(
+        target_model.transformer.layers[l][1].fn.ff2.weight.data = make_fxp(
             source_model.transformer.layers[l][1].fn.net[3].weight)
-        target_model.transformer.layers[l][1].fn.net[3].bias.data = make_fxp(
+        target_model.transformer.layers[l][1].fn.ff2.bias.data = make_fxp(
             source_model.transformer.layers[l][1].fn.net[3].bias)
 
         target_model.transformer.layers[l][0].fn.to_qkv.weight.data = make_fxp(
@@ -133,9 +133,6 @@ def test(opt, test_dataloader, model, print_results=False, target_model = None):
         print(results)
 
 
-
-
-
 def main():
     model = get_trained_model()
     model.eval()
@@ -159,7 +156,7 @@ def main():
     train_dataloader = get_data_loader_siena(batch_size=32, patient_ids=options.patients,
                                              save_dir=options.siena_data_dir)
 
-    # test(options, test_dataloader, model, print_results=True)
+    test(options, test_dataloader, model, print_results=True)
     test(options, test_dataloader, net, print_results=True)
     input_signal = next(iter(test_dataloader))[0].to(device)
     input_signal = input_signal.reshape((input_signal.shape[0], 1, -1, input_signal.shape[3]))
