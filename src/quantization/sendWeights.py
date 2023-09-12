@@ -147,6 +147,27 @@ def get_activation(name):
     return hook
 
 
+def quantize_model(model, net, test_dataloader, train_dataloader):
+    net.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+    torch.ao.quantization.prepare(net, inplace=True)
+    print('Post Training Quantization Prepare: Inserting Observers')
+
+    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
+    print('Post Training Quantization: Calibration done')
+    torch.ao.quantization.convert(net, inplace=True)
+    print('Post Training Quantization: Convert done')
+    print('\n Conv1: After fusion and quantization \n\n', net.layers[3][1])
+    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
+
+
+def save_to_C(net, example):
+    print("Example", example.shape)
+    traced_script_module = torch.jit.trace(net, example)
+    output = traced_script_module(example)
+    print("Torch script output", output)
+    traced_script_module.save("traced_resnet_model.pt")
+
+
 def main():
     model = get_trained_model()
     net = ViTInferenceNet(q=True)
@@ -158,24 +179,16 @@ def main():
     source_output = model(torch.rand((32, 1, 3200, 15)))
     target_output = net(activation['transformer_input'])
     print("Error", torch.sum(torch.abs(target_output - source_output)))
-    hook.remove()
 
     all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
     test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
     test_dataloader = get_data_loader_siena(batch_size=32, patient_ids=test_patient_ids, save_dir=options.siena_data_dir)
     train_dataloader = get_data_loader_siena(batch_size=32, patient_ids=options.patients, save_dir=options.siena_data_dir)
-    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
+    # test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
 
-    net.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-    torch.ao.quantization.prepare(net, inplace=True)
-    print('Post Training Quantization Prepare: Inserting Observers')
-
-    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
-    print('Post Training Quantization: Calibration done')
-    torch.ao.quantization.convert(net, inplace=True)
-    print('Post Training Quantization: Convert done')
-    print('\n Conv1: After fusion and quantization \n\n', net.layers[3][1])
-    test(options, test_dataloader=test_dataloader, model=model, print_results=True, target_model=net)
+    # quantize_model(model, net, test_dataloader, train_dataloader)
+    save_to_C(net, activation['transformer_input'])
+    hook.remove()
 
 
 def test(opt, test_dataloader, model, print_results=False, target_model = None):
@@ -252,13 +265,4 @@ def test(opt, test_dataloader, model, print_results=False, target_model = None):
 
 if __name__ == '__main__':
     main()
-
-
-
-# x, y = next(iter(test_dataloader))
-# x = x.reshape((x.shape[0], 1, -1, x.shape[3]))
-# print("X reshape", x.shape)
-# x_rearrange = rearrange(x)
-# print(x_rearrange.shape)
-# model_output = net(x_rearrange)
 
