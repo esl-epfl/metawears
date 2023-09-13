@@ -30,27 +30,27 @@ def make_fxp(source_weight):
     target_weight = torch.where(target_weight < -CLIP_VAL,  -CLIP_VAL, target_weight)
     target_weight *= (2**FRACTION_BITS)
     target_weight = target_weight.to(torch.int)
-    # total_weights = torch.cat((total_weights, target_weight.flatten()))
+    total_weights = torch.cat((total_weights, target_weight.flatten()))
     return target_weight.to(torch.float) / (2**FRACTION_BITS)
 
 
 def send_weights(source_model, target_model):
     target_model.pos_embedding.data = make_fxp(source_model.pos_embedding)
     target_model.cls_token.data = make_fxp(source_model.cls_token)
-    target_model.mlp_head[0].weight.data = make_fxp(source_model.mlp_head[0].weight)
-    target_model.mlp_head[0].bias.data = make_fxp(source_model.mlp_head[0].bias)
+    target_model.mlp_head_layer_norm.weight.data = make_fxp(source_model.mlp_head[0].weight)
+    target_model.mlp_head_layer_norm.bias.data = make_fxp(source_model.mlp_head[0].bias)
 
-    target_model.mlp_head[1].weight.data = make_fxp(source_model.mlp_head[1].weight)
-    target_model.mlp_head[1].bias.data = make_fxp(source_model.mlp_head[1].bias)
+    target_model.mlp_head_linear.weight.data = make_fxp(source_model.mlp_head[1].weight)
+    target_model.mlp_head_linear.bias.data = make_fxp(source_model.mlp_head[1].bias)
 
-    target_model.to_patch_embedding[1].weight.data = make_fxp(source_model.to_patch_embedding[1].weight)
-    target_model.to_patch_embedding[1].bias.data = make_fxp(source_model.to_patch_embedding[1].bias)
+    target_model.to_patch_embedding_layer_norm1.weight.data = make_fxp(source_model.to_patch_embedding[1].weight)
+    target_model.to_patch_embedding_layer_norm1.bias.data = make_fxp(source_model.to_patch_embedding[1].bias)
 
-    target_model.to_patch_embedding[2].weight.data = make_fxp(source_model.to_patch_embedding[2].weight)
-    target_model.to_patch_embedding[2].bias.data = make_fxp(source_model.to_patch_embedding[2].bias)
+    target_model.to_patch_embedding_linear.weight.data = make_fxp(source_model.to_patch_embedding[2].weight)
+    target_model.to_patch_embedding_linear.bias.data = make_fxp(source_model.to_patch_embedding[2].bias)
 
-    target_model.to_patch_embedding[3].weight.data = make_fxp(source_model.to_patch_embedding[3].weight)
-    target_model.to_patch_embedding[3].bias.data = make_fxp(source_model.to_patch_embedding[3].bias)
+    target_model.to_patch_embedding_layer_norm2.weight.data = make_fxp(source_model.to_patch_embedding[3].weight)
+    target_model.to_patch_embedding_layer_norm2.bias.data = make_fxp(source_model.to_patch_embedding[3].bias)
 
     for l in range(4):
         target_model.transformer.layers[l][0].norm.weight.data = make_fxp(

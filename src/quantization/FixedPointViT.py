@@ -128,12 +128,10 @@ class FixedPointViT(nn.Module):
         patch_dim = channels * patch_height * patch_width
         assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
 
-        self.to_patch_embedding = nn.Sequential(
-            Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = patch_height, p2 = patch_width),
-            nn.LayerNorm(patch_dim),
-            nn.Linear(patch_dim, dim),
-            nn.LayerNorm(dim),
-        )
+        self.to_patch_embedding_rearrange = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = patch_height, p2 = patch_width)
+        self.to_patch_embedding_layer_norm1 = nn.LayerNorm(patch_dim)
+        self.to_patch_embedding_linear = nn.Linear(patch_dim, dim)
+        self.to_patch_embedding_layer_norm2 = nn.LayerNorm(dim)
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
@@ -144,15 +142,20 @@ class FixedPointViT(nn.Module):
         self.pool = pool
         self.to_latent = nn.Identity()
 
-        self.mlp_head = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, num_classes)
-        )
+        self.mlp_head_layer_norm = nn.LayerNorm(dim)
+        self.mlp_head_linear = nn.Linear(dim, num_classes)
 
     def forward(self, img):
         img = make_fxp(img)
-        x = self.to_patch_embedding(img)
+        x = self.to_patch_embedding_rearrange(img)
         x = make_fxp(x)
+        x = self.to_patch_embedding_layer_norm1(x)
+        x = make_fxp(x)
+        x = self.to_patch_embedding_linear(x)
+        x = make_fxp(x)
+        x = self.to_patch_embedding_layer_norm2(x)
+        x = make_fxp(x)
+
         b, n, _ = x.shape
 
         cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = b)
@@ -166,4 +169,10 @@ class FixedPointViT(nn.Module):
         x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
 
         x = self.to_latent(x)
-        return self.mlp_head(x)
+        x = make_fxp(x)
+        x = self.mlp_head_layer_norm(x)
+        x = make_fxp(x)
+        x = self.mlp_head_linear(x)
+        x = make_fxp(x)
+
+        return x
