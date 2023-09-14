@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from sendWeights import get_trained_model
+import os
+from few_shot_train import init_vit
 from einops import rearrange, repeat
 from FixedPointViT import FixedPointViT
 from FixedPointViT import CLIP_VAL, FRACTION_BITS
@@ -26,8 +27,9 @@ total_activation = torch.zeros(0).to(device)
 def make_fxp(source_weight):
     global total_weights
 
-    target_weight = torch.where(source_weight > CLIP_VAL, CLIP_VAL, source_weight)
-    target_weight = torch.where(target_weight < -CLIP_VAL,  -CLIP_VAL, target_weight)
+    eps = 1 / (2 ** FRACTION_BITS)
+    target_weight = torch.where(source_weight >= CLIP_VAL - eps, CLIP_VAL - eps, source_weight)
+    target_weight = torch.where(target_weight < -(CLIP_VAL - eps), -(CLIP_VAL - eps), target_weight)
     target_weight *= (2**FRACTION_BITS)
     target_weight = target_weight.to(torch.int)
     total_weights = torch.cat((total_weights, target_weight.flatten()))
@@ -74,6 +76,21 @@ def send_weights(source_model, target_model):
 
         target_model.transformer.layers[l][0].fn.to_qkv.weight.data = make_fxp(
             source_model.transformer.layers[l][0].fn.to_qkv.weight)
+
+
+def save_weights(net):
+    with open("../../output/data.cpp", "w") as f:
+        for name, param in net.named_parameters():
+            if param.requires_grad:
+                param_to_write = param.detach().cpu().numpy().flatten()
+                param_to_write = param_to_write * (2**FRACTION_BITS)
+                param_to_write = param_to_write.astype(np.int16)
+                f.write("int16_t {}[{}] = ".format(name.replace(".", "_"), param_to_write.shape[0]))
+                f.write("{")
+                for elem in param_to_write:
+                    f.write(str(elem))
+                    f.write(", ")
+                f.write("};\n")
 
 
 def test(opt, test_dataloader, model, print_results=False, target_model = None):
@@ -133,6 +150,14 @@ def test(opt, test_dataloader, model, print_results=False, target_model = None):
         print(results)
 
 
+def get_trained_model():
+    exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
+    model_path = os.path.join('../', exp_root, 'last_model.pth')
+    model = init_vit(options)
+    model.load_state_dict(torch.load(model_path))
+    return model
+
+
 def main():
     model = get_trained_model()
     model.eval()
@@ -143,11 +168,10 @@ def main():
     net.eval()
     print(model)
     print(net)
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            print(name)
 
     send_weights(model, net)
+
+    save_weights(net)
 
     all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
     test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
@@ -156,13 +180,14 @@ def main():
     train_dataloader = get_data_loader_siena(batch_size=32, patient_ids=options.patients,
                                              save_dir=options.siena_data_dir)
 
-    test(options, test_dataloader, model, print_results=True)
-    test(options, test_dataloader, net, print_results=True)
+    # test(options, test_dataloader, model, print_results=True)
+    # test(options, test_dataloader, net, print_results=True)
     input_signal = next(iter(test_dataloader))[0].to(device)
     input_signal = input_signal.reshape((input_signal.shape[0], 1, -1, input_signal.shape[3]))
 
     error = torch.sum(torch.abs(net(input_signal) - model(input_signal)))
     print("Error", error)
+    return
     print(total_weights.shape)
     # Create a histogram
     plt.hist(total_weights.detach().cpu().numpy(), bins=20, color='blue', alpha=0.7)

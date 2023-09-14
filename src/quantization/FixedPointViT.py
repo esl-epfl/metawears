@@ -1,13 +1,13 @@
 import torch
 from torch import nn
-
+import numpy as np
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
 # helpers
 
-CLIP_VAL = 1
-FRACTION_BITS = 6
+CLIP_VAL = 8
+FRACTION_BITS = 12
 
 
 def pair(t):
@@ -15,11 +15,32 @@ def pair(t):
 
 
 def make_fxp(source_weight):
-    target_weight = torch.where(source_weight > CLIP_VAL, CLIP_VAL, source_weight)
-    target_weight = torch.where(target_weight < -CLIP_VAL,  -CLIP_VAL, target_weight)
+    eps = 1 / (2**FRACTION_BITS)
+    target_weight = torch.where(source_weight >= CLIP_VAL - eps, CLIP_VAL - eps, source_weight)
+    target_weight = torch.where(target_weight < -(CLIP_VAL - eps),  -(CLIP_VAL - eps), target_weight)
     target_weight *= (2**FRACTION_BITS)
     target_weight = target_weight.to(torch.int)
     return target_weight.to(torch.float) / (2**FRACTION_BITS)
+
+
+def save_signals(x, name, first_signal):
+    with open("../../output/signal.cpp", "w" if first_signal else "a") as f:
+        param_to_write = x.detach().cpu().numpy().reshape((-1,))
+        param_to_write = param_to_write * (2 ** FRACTION_BITS)
+        param_to_write = param_to_write.astype(np.int16)
+        f.write("int16_t {}[{}] =".format(name, param_to_write.shape[0]))
+        f.write("{")
+        for elem in param_to_write:
+            f.write(str(elem))
+            f.write(", ")
+        f.write("};\n")
+
+
+def debug_fxp(x):
+    param_to_write = x.detach().cpu().numpy().reshape((-1,))
+    param_to_write = param_to_write * (2 ** FRACTION_BITS)
+    param_to_write = param_to_write.astype(np.int32)
+    print(param_to_write)
 
 # classes
 
@@ -149,8 +170,11 @@ class FixedPointViT(nn.Module):
         img = make_fxp(img)
         x = self.to_patch_embedding_rearrange(img)
         x = make_fxp(x)
+        save_signals(x[0], "input_signal", first_signal=True)
+        # debug_fxp(1 / torch.std(x[0], dim=1, correction=0))
         x = self.to_patch_embedding_layer_norm1(x)
         x = make_fxp(x)
+        save_signals(x[0], "to_patch_embedding_layer_norm1", first_signal=False)
         x = self.to_patch_embedding_linear(x)
         x = make_fxp(x)
         x = self.to_patch_embedding_layer_norm2(x)
