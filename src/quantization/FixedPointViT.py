@@ -166,15 +166,13 @@ class FixedPointViT(nn.Module):
         self.mlp_head_layer_norm = nn.LayerNorm(dim)
         self.mlp_head_linear = nn.Linear(dim, num_classes)
 
-    def forward(self, img):
+    def forward(self, img, w, b):
         img = make_fxp(img)
         x = self.to_patch_embedding_rearrange(img)
         x = make_fxp(x)
         save_signals(x[0], "input_signal", first_signal=True)
-        # debug_fxp(1 / torch.std(x[0], dim=1, correction=0))
         x = self.to_patch_embedding_layer_norm1(x)
         x = make_fxp(x)
-        save_signals(x[0], "to_patch_embedding_layer_norm1", first_signal=False)
         x = self.to_patch_embedding_linear(x)
         x = make_fxp(x)
         x = self.to_patch_embedding_layer_norm2(x)
@@ -185,6 +183,8 @@ class FixedPointViT(nn.Module):
         cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = b)
         x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, :(n + 1)]
+        x = make_fxp(x)
+        save_signals(x[0], "pos_embedding_signal", first_signal=False)
         x = self.dropout(x)
         x = make_fxp(x)
 

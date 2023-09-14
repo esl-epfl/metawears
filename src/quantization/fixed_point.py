@@ -32,7 +32,7 @@ def make_fxp(source_weight):
     target_weight = torch.where(target_weight < -(CLIP_VAL - eps), -(CLIP_VAL - eps), target_weight)
     target_weight *= (2**FRACTION_BITS)
     target_weight = target_weight.to(torch.int)
-    total_weights = torch.cat((total_weights, target_weight.flatten()))
+    total_weights = torch.cat((total_weights, target_weight.reshape(-1, )))
     return target_weight.to(torch.float) / (2**FRACTION_BITS)
 
 
@@ -82,7 +82,10 @@ def save_weights(net):
     with open("../../output/data.cpp", "w") as f:
         for name, param in net.named_parameters():
             if param.requires_grad:
-                param_to_write = param.detach().cpu().numpy().flatten()
+                print(name, param.shape)
+                param_to_write = param.detach().cpu().numpy().squeeze()
+                param_to_write = param_to_write.transpose().reshape(-1,) if name != "pos_embedding" \
+                    else param_to_write.reshape(-1,)
                 param_to_write = param_to_write * (2**FRACTION_BITS)
                 param_to_write = param_to_write.astype(np.int16)
                 f.write("int16_t {}[{}] = ".format(name.replace(".", "_"), param_to_write.shape[0]))
@@ -185,7 +188,8 @@ def main():
     input_signal = next(iter(test_dataloader))[0].to(device)
     input_signal = input_signal.reshape((input_signal.shape[0], 1, -1, input_signal.shape[3]))
 
-    error = torch.sum(torch.abs(net(input_signal) - model(input_signal)))
+    error = torch.sum(torch.abs(net(input_signal, net.to_patch_embedding_linear.weight.data,
+                                    net.to_patch_embedding_linear.bias.data) - model(input_signal)))
     print("Error", error)
     return
     print(total_weights.shape)
