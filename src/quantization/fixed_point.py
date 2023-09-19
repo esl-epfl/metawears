@@ -79,21 +79,34 @@ def send_weights(source_model, target_model):
 
 
 def save_weights(net):
+
     with open("../../output/data.cpp", "w") as f:
+        def write_infile(param_to_write, param_name):
+            param_to_write = param_to_write * (2 ** FRACTION_BITS)
+            param_to_write = param_to_write.astype(np.int16)
+            f.write("int16_t {}[{}] = ".format(param_name.replace(".", "_"), param_to_write.shape[0]))
+            f.write("{")
+            for elem in param_to_write:
+                f.write(str(elem))
+                f.write(", ")
+            f.write("};\n")
+
         for name, param in net.named_parameters():
             if param.requires_grad:
                 print(name, param.shape)
-                param_to_write = param.detach().cpu().numpy().squeeze()
-                param_to_write = param_to_write.transpose().reshape(-1,) if name != "pos_embedding" \
-                    else param_to_write.reshape(-1,)
-                param_to_write = param_to_write * (2**FRACTION_BITS)
-                param_to_write = param_to_write.astype(np.int16)
-                f.write("int16_t {}[{}] = ".format(name.replace(".", "_"), param_to_write.shape[0]))
-                f.write("{")
-                for elem in param_to_write:
-                    f.write(str(elem))
-                    f.write(", ")
-                f.write("};\n")
+                if "to_qkv" in name:
+                    q, k, v =  param.detach().transpose(-1, -2).chunk(3, dim=-1)
+                    for qkv_mat, qkv_name in zip([q, k, v], ["Q", "K", "V"]):
+                        for head in range(4):
+                            param_to_write = qkv_mat[:, head*4:(head+1)*4]
+                            param_to_write = param_to_write.cpu().numpy().squeeze().reshape(-1,)
+                            write_infile(param_to_write, "{}.{}.H{}".format(name, qkv_name, head))
+                else:
+                    param_to_write = param.detach().cpu().numpy().squeeze()
+                    param_to_write = param_to_write.transpose().reshape(-1,) if name != "pos_embedding" \
+                        else param_to_write.reshape(-1,)
+                    write_infile(param_to_write, name)
+
 
 
 def test(opt, test_dataloader, model, print_results=False, target_model = None):

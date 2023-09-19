@@ -24,6 +24,8 @@ import torch
 import os
 from vit_pytorch.vit import ViT
 import pickle
+from torchsummary import summary
+
 
 
 def init_seed(opt):
@@ -267,7 +269,7 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
     return best_state, best_acc, train_loss_total, train_acc_total, val_loss_total, val_acc_total
 
 
-def test(opt, test_dataloader, model):
+def test(opt, test_dataloader, model, print_results=False):
     """
     Test the model trained with the prototypical learning algorithm
     """
@@ -291,6 +293,8 @@ def test(opt, test_dataloader, model):
         prototypes = get_prototypes(model_output, target=y_support_set)
         prototypes_all.append(prototypes)
 
+    print("Prototypes", prototypes_all)
+
     predict = []
     predict_prob = []
     true_label = []
@@ -312,17 +316,23 @@ def test(opt, test_dataloader, model):
     results = {
         "seed": opt.manual_seed,
         "num_support": opt.num_support_val,
+        "skip_base_learner": opt.skip_base_learner,
+        "skip_finetune": opt.skip_finetune,
         "patients": opt.patients,
         "finetune_patients": opt.finetune_patients,
         "excluded_patients": opt.excluded_patients,
         "auc": roc_auc_score(true_label, predict_prob)
     }
 
+    if print_results:
+        print(results)
+        return
+
     # Convert the results dictionary to a DataFrame
     result_df = pd.DataFrame([results])
 
     # Save results to a JSON file
-    output_filename = "../output/results/results_meta_transfer.csv"
+    output_filename = "../output/results/results_meta_transfer_quantized.csv"
 
     # Check if the file exists
     try:
@@ -361,7 +371,8 @@ def eval(options):
 
     test(opt=options,
          test_dataloader=test_dataloader,
-         model=model)
+         model=model,
+         print_results=True)
 
 
 def main():

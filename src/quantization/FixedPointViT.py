@@ -79,7 +79,7 @@ class FeedForward(nn.Module):
         return x
 
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
+    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0., layer_num = -1):
         super().__init__()
         inner_dim = dim_head *  heads
         project_out = not (heads == 1 and dim_head == dim)
@@ -97,14 +97,18 @@ class Attention(nn.Module):
 
 
     def forward(self, x):
-        qkv = self.to_qkv(x).chunk(3, dim = -1)
+        qkv = self.to_qkv(x).chunk(3, dim=-1)
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
+        # print(torch.sum(torch.abs(q - qkv[0])))
         q = make_fxp(q)
         k = make_fxp(k)
         v = make_fxp(v)
-
+        # save_signals(q[0][0], "transformer_layers_{}_0_fn_q".format(self.layer_num), first_signal=False)
+        # save_signals(k[0][0], "transformer_layers_{}_0_fn_k".format(self.layer_num), first_signal=False)
+        # save_signals(k.transpose(-1, -2)[0][0], "transformer_layers_{}_0_fn_kT".format(self.layer_num), first_signal=False)
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
         dots = make_fxp(dots)
+        print("Shape ", dots.shape)
 
         attn = self.attend(dots)
         attn = make_fxp(attn)
@@ -124,15 +128,16 @@ class Transformer(nn.Module):
     def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
         super().__init__()
         self.layers = nn.ModuleList([])
-        for _ in range(depth):
+        for l in range(depth):
             self.layers.append(nn.ModuleList([
-                PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout)),
+                PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout, layer_num=l)),
                 PreNorm(dim, FeedForward(dim, mlp_dim, dropout = dropout))
             ]))
     def forward(self, x):
         for attn, ff in self.layers:
             x = attn(x) + x
             x = make_fxp(x)
+            # save_signals(x[0], "transformer_layers_{}_0_fn_add".format(i), first_signal=False)
             x = ff(x) + x
             x = make_fxp(x)
         return x
