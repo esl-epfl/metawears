@@ -172,6 +172,7 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
 
     if exp_root is None:
         exp_root = opt.experiment_root
+    model_path = os.path.join(exp_root)
     best_model_path = os.path.join(exp_root, 'best_model.pth')
     last_model_path = os.path.join(exp_root, 'last_model.pth')
 
@@ -217,6 +218,8 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
         train_acc_total.append(avg_acc)
         print('Avg Train Loss: {}, Avg Train Acc: {}'.format(avg_loss, avg_acc))
         lr_scheduler.step()
+
+        torch.save(model.state_dict(), os.path.join(model_path, "epoch{}.pth".format(epoch)))
         if val_dataloader is None:
             continue
         val_iter = iter(val_dataloader)
@@ -256,7 +259,7 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
         print('Avg Val Loss: {}, Avg Val Acc: {}{}'.format(
             avg_loss, avg_acc, postfix))
         if avg_acc >= best_acc:
-            torch.save(model.state_dict(), best_model_path)
+            torch.save(model.state_dict(), model_path)
             best_acc = avg_acc
             best_state = model.state_dict()
 

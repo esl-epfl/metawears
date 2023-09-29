@@ -71,7 +71,7 @@ def test(opt, test_dataloader, train_loader, model, print_results=False, target_
 
     plt.scatter(output_2d_model_non[:, 0], output_2d_model_non[:, 1], label='Model Outputs', marker ='o', color='green', s=10)
     plt.scatter(output_2d_model_seiz[:, 0], output_2d_model_seiz[:, 1], label='Model Outputs', marker ='o', color='red',  s=10)
-    plt.scatter(output_2d_prototypes_non[:, 0], output_2d_prototypes_non[:, 1], label='Prototypes', marker='x', color='green',
+    plt.scatter(output_2d_prototypes_non[:, 0], output_2d_prototypes_non[:, 1], label='Prototypes', marker='x', color='darkgreen',
                 s=200)
     plt.scatter(output_2d_prototypes_seiz[:, 0], output_2d_prototypes_seiz[:, 1], label='Prototypes', marker='x',
                 color='red',
@@ -95,8 +95,7 @@ def test(opt, test_dataloader, train_loader, model, print_results=False, target_
                                             axis=0)
         test_samples_non = np.concatenate((test_samples_non, model_output[non_index].detach().cpu().numpy()), axis=0)
 
-
-        prob, output = prototypical_evaluation_per_patient(prototypes_all, model_output)
+        prob, output, _ = prototypical_evaluation_per_patient(prototypes_all, model_output)
         predict.append(output.detach().cpu().numpy())
         predict_prob.append(prob.detach().cpu().numpy())
         true_label.append(y.detach().cpu().numpy())
@@ -106,8 +105,9 @@ def test(opt, test_dataloader, train_loader, model, print_results=False, target_
 
     output_2d_seiz = tsne.transform(test_samples_seiz)
     output_2d_non = tsne.transform(test_samples_non)
-    # plt.scatter(output_2d_non[:, 0], output_2d_non[:, 1], label='Test', marker='.', color='blue',
-    #             s=4)
+    random_indices = np.random.choice(output_2d_non.shape[0], size=100, replace=False)
+    plt.scatter(output_2d_non[random_indices, 0], output_2d_non[random_indices, 1], label='Test', marker='.', color='orange',
+                s=1)
     plt.scatter(output_2d_seiz[:, 0], output_2d_seiz[:, 1], label='Test', marker='.', color='purple',
                 s=4)
 
@@ -129,27 +129,29 @@ def test(opt, test_dataloader, train_loader, model, print_results=False, target_
         print(results)
 
 
-def get_trained_model():
+def get_trained_model(epoch):
     exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
-    model_path = os.path.join('../', exp_root, 'last_model.pth')
+    model_path = os.path.join('../', exp_root, 'epoch{}.pth'.format(epoch))
     model = init_vit(options)
     model.load_state_dict(torch.load(model_path))
     return model
 
 
 def main():
-    model = get_trained_model()
-    model.eval()
-    l = 0
+    for epoch in [0, 2, 4, 6, 8, 16, 24]:
+        print("************* Epoch {} ************".format(epoch))
+        model = get_trained_model(epoch)
+        model.eval()
+        l = 0
 
-    all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
-    test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
-    test_dataloader = get_data_loader_siena(batch_size=32, patient_ids=test_patient_ids,
-                                            save_dir=options.siena_data_dir)
-    train_dataloader = get_data_loader_siena(batch_size=32, patient_ids=options.finetune_patients,
-                                             save_dir=options.siena_data_dir)
+        all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
+        test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
+        test_dataloader = get_data_loader_siena(batch_size=32, patient_ids=test_patient_ids,
+                                                save_dir=options.siena_data_dir)
+        train_dataloader = get_data_loader_siena(batch_size=32, patient_ids=options.finetune_patients,
+                                                 save_dir=options.siena_data_dir)
 
-    test(options, test_dataloader, train_dataloader, model, print_results=True)
+        test(options, test_dataloader, train_dataloader, model, print_results=True)
 
 
 if __name__ == '__main__':
