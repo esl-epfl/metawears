@@ -173,11 +173,19 @@ def get_data_loader_siena_finetune(patient_ids, save_dir=args.siena_data_dir):
             print('------------------------  error  ------------------------')
             exit(-1)
 
-    train_data = file_lists['bckg'] + file_lists['seiz'] * \
-                 int(len(file_lists['bckg']) / len(file_lists['seiz']))
+    seiz_len = len(file_lists['seiz'])
+    target_len = 10
+    ratio = 10 / seiz_len
+    if seiz_len > target_len:
+        train_data = file_lists['bckg'] + file_lists['seiz']
+    else:
+        train_data = file_lists['bckg'] + file_lists['seiz'] * (1 + target_len // seiz_len)
     non_seizure_labels = np.zeros(len(file_lists['bckg']))
-    seizure_labels = np.ones(len(file_lists['seiz']) *
-                             int(len(file_lists['bckg']) / len(file_lists['seiz'])))
+
+    if seiz_len > target_len:
+        seizure_labels = np.ones(len(file_lists['seiz']))
+    else:
+        seizure_labels = np.ones(len(file_lists['seiz'] * (1 + target_len // seiz_len)))
     train_label = np.concatenate((non_seizure_labels, seizure_labels))
 
     train_transforms = transforms.Compose(

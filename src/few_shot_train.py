@@ -169,6 +169,7 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
     val_loss_total = []
     val_acc_total = []
     best_acc = 0
+    best_auc = 0
 
     if exp_root is None:
         exp_root = opt.experiment_root
@@ -219,9 +220,19 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
         print('Avg Train Loss: {}, Avg Train Acc: {}'.format(avg_loss, avg_acc))
         lr_scheduler.step()
 
-        torch.save(model.state_dict(), os.path.join(model_path, "epoch{}.pth".format(epoch)))
+        # torch.save(model.state_dict(), os.path.join(model_path, "epoch{}.pth".format(epoch)))
         if val_dataloader is None:
             continue
+        auc = test(opt, val_dataloader, model, print_results=False, return_results=True)
+        postfix = ' (Best)' if auc >= best_auc else ' (Best: {})'.format(
+            best_auc)
+        print('Val auc: {}{}'.format(auc, postfix))
+        if auc >= best_auc:
+            torch.save(model.state_dict(), best_model_path)
+            best_auc = auc
+            best_state = model.state_dict()
+
+        continue
         val_iter = iter(val_dataloader)
         model.eval()
         for batch in val_iter:
@@ -259,7 +270,7 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
         print('Avg Val Loss: {}, Avg Val Acc: {}{}'.format(
             avg_loss, avg_acc, postfix))
         if avg_acc >= best_acc:
-            torch.save(model.state_dict(), model_path)
+            torch.save(model.state_dict(), best_model_path)
             best_acc = avg_acc
             best_state = model.state_dict()
 
@@ -272,7 +283,7 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
     return best_state, best_acc, train_loss_total, train_acc_total, val_loss_total, val_acc_total
 
 
-def test(opt, test_dataloader, model, print_results=False):
+def test(opt, test_dataloader, model, print_results=False, return_results=False):
     """
     Test the model trained with the prototypical learning algorithm
     """
@@ -296,8 +307,6 @@ def test(opt, test_dataloader, model, print_results=False):
         prototypes = get_prototypes(model_output, target=y_support_set)
         prototypes_all.append(prototypes)
 
-    print("Prototypes", prototypes_all)
-
     predict = []
     predict_prob = []
     true_label = []
@@ -307,7 +316,7 @@ def test(opt, test_dataloader, model, print_results=False):
 
         x = x.reshape((x.shape[0], 1, -1, x.shape[3]))
         model_output = model(x)
-        prob, output = prototypical_evaluation_per_patient(prototypes_all, model_output)
+        prob, output, _ = prototypical_evaluation_per_patient(prototypes_all, model_output)
         predict.append(output.detach().cpu().numpy())
         predict_prob.append(prob.detach().cpu().numpy())
         true_label.append(y.detach().cpu().numpy())
@@ -331,11 +340,14 @@ def test(opt, test_dataloader, model, print_results=False):
         print(results)
         return
 
+    if return_results:
+        return roc_auc_score(true_label, predict_prob)
+
     # Convert the results dictionary to a DataFrame
     result_df = pd.DataFrame([results])
 
     # Save results to a JSON file
-    output_filename = "../output/results/results_meta_transfer_quantized.csv"
+    output_filename = "../output/results/results_with_validation.csv"
 
     # Check if the file exists
     try:
@@ -350,6 +362,7 @@ def test(opt, test_dataloader, model, print_results=False):
     except FileNotFoundError:
         # If the file doesn't exist, create a new file with the DataFrame
         result_df.to_csv(output_filename, index=False)
+        print("Created a new file")
 
 
 def eval(options):
@@ -369,13 +382,13 @@ def eval(options):
         model_path = os.path.join(exp_root, 'best_model.pth')
     else:
         exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
-        model_path = os.path.join(exp_root, 'last_model.pth')
+        model_path = os.path.join(exp_root, 'best_model.pth')
     model.load_state_dict(torch.load(model_path))
 
     test(opt=options,
          test_dataloader=test_dataloader,
          model=model,
-         print_results=True)
+         print_results=False)
 
 
 def main():
@@ -419,6 +432,11 @@ def finetune(options):
 
     tr_sampler = init_sampler(options, tr_label, mode="train")
     tr_dataloader = torch.utils.data.DataLoader(tr_dataset, batch_sampler=tr_sampler, num_workers=6)
+
+    val_dataloader = get_data_loader_siena(batch_size=options.num_query_val,
+                                           patient_ids=options.validation_patients,
+                                           save_dir=options.siena_data_dir)
+
     model = init_vit(options)
     if not options.skip_base_learner:
         model_path = os.path.join(options.base_learner_root, 'best_model.pth')
@@ -429,7 +447,7 @@ def finetune(options):
     lr_scheduler = init_lr_scheduler(options, optim)
     train(opt=options,
           tr_dataloader=tr_dataloader,
-          val_dataloader=None,
+          val_dataloader=val_dataloader,
           model=model,
           optim=optim,
           lr_scheduler=lr_scheduler,

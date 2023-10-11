@@ -131,14 +131,18 @@ def test(opt, test_dataloader, train_loader, model, print_results=False, target_
 
 def get_trained_model(epoch):
     exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
-    model_path = os.path.join('../', exp_root, 'epoch{}.pth'.format(epoch))
+    if epoch == -1:
+        model_path = os.path.join('../', exp_root, 'best_model.pth'.format(epoch))
+    else:
+        model_path = os.path.join('../', exp_root, 'epoch{}.pth'.format(epoch))
     model = init_vit(options)
     model.load_state_dict(torch.load(model_path))
     return model
 
 
 def main():
-    for epoch in [0, 2, 4, 6, 8, 16, 24]:
+    # for epoch in [4, 6, 8, 16, 24, -1]:
+    for epoch in [ 16, 24, -1]:
         print("************* Epoch {} ************".format(epoch))
         model = get_trained_model(epoch)
         model.eval()

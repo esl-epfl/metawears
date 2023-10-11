@@ -32,7 +32,9 @@ def euclidean_dist(x, y):
     x = x.unsqueeze(1).expand(n, m, d)
     y = y.unsqueeze(0).expand(n, m, d)
 
-    return torch.pow(x - y, 2).sum(2)
+    dist = torch.pow(x - y, 2).sum(2)
+
+    return torch.sqrt(dist)
 
 
 def prototypical_loss(input, target, n_support):
@@ -154,7 +156,7 @@ def  prototypical_evaluation_per_patient(all_prototypes, inputs):
     log_p_y = F.softmax(-dists_min, dim=1)
     y_hat = log_p_y.argmax(dim=1)
     y_prob = log_p_y[:, 1]
-    return y_prob, y_hat
+    return y_prob, y_hat, dists
 
 
 

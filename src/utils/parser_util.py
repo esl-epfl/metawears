@@ -17,7 +17,7 @@ def get_parser():
     parser.add_argument('-exp', '--experiment_root',
                         type=str,
                         help='root where to store models, losses and accuracies',
-                        default='../output' + os.sep + 'finetuned')
+                        default='../output' + os.sep + 'with_validation')
 
     parser.add_argument('-baselearner', '--base_learner_root',
                         type=str,
@@ -110,6 +110,12 @@ def get_parser():
                         type=int,
                         nargs='+',  # '+' means one or more values
                         help='patient IDs excluded from the test set',
+                        default=-1)
+
+    parser.add_argument('--validation_patients',
+                        type=int,
+                        nargs='+',  # '+' means one or more values
+                        help='patient IDs in the validation set',
                         default=-1)
 
     parser.add_argument('--cuda',
