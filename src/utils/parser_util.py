@@ -22,7 +22,7 @@ def get_parser():
     parser.add_argument('-baselearner', '--base_learner_root',
                         type=str,
                         help='root where to load pre-trained models',
-                        default='../output' + os.sep + 'random_support')
+                        default='../output' + os.sep + 'with_validation')
 
     parser.add_argument('--finetune', action='store_true', help='enables global model')
     parser.add_argument('--skip_base_learner', action='store_true', help='meta-train on Siena from scratch')
