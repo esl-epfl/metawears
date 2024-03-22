@@ -1,0 +1,3 @@
+[submodule "sz-validation-framework"]
+	path = sz-validation-framework
+	url = git@github.com:esl-epfl/sz-validation-framework.git

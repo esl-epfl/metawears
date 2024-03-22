@@ -354,8 +354,8 @@ def test(opt, test_dataloader, model, print_results=False, return_results=False)
         # Read the existing file
         existing_df = pd.read_csv(output_filename)
 
-        # Append the new results to the existing DataFrame
-        updated_df = existing_df.append(result_df, ignore_index=True)
+        # Concatenate the new results to the existing DataFrame
+        updated_df = pd.concat([existing_df, result_df], ignore_index=True)
 
         # Write the updated DataFrame back to the file
         updated_df.to_csv(output_filename, index=False)
