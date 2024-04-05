@@ -1,3 +1,6 @@
 [submodule "sz-validation-framework"]
 	path = sz-validation-framework
 	url = git@github.com:esl-epfl/sz-validation-framework.git
+[submodule "MAML-Pytorch"]
+	path = MAML-Pytorch
+	url = git@github.com:dragen1860/MAML-Pytorch.git
