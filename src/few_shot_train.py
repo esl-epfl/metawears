@@ -232,7 +232,6 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
             best_auc = auc
             best_state = model.state_dict()
 
-        continue
         val_iter = iter(val_dataloader)
         model.eval()
         for batch in val_iter:
