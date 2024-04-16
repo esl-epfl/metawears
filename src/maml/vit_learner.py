@@ -18,14 +18,14 @@ class VitLearner(nn.Module):
         model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=16, dim=16, depth=4, heads=4, mlp_dim=4,
                     pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2)
         self.model = model
-        self.vars = []
+        self.vars = nn.ParameterList()
         # save a list as all the parameters that need to be optimized
         self.var_names = []
         for name, param in model.named_parameters():
             # If its requires_grad is True, then append the parameter to the list
-            if param.requires_grad:
-                self.var_names.append(name)
-                self.vars.append(param)
+            # if param.requires_grad:
+            self.var_names.append(name)
+            self.vars.append(param)
 
     def forward(self, x, vars=None):
         """
@@ -39,10 +39,9 @@ class VitLearner(nn.Module):
         else:
             model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=16, dim=16, depth=4, heads=4, mlp_dim=4,
                         pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2)
-            # load the vars as parameters of the model based on the var_names
-            for name, param in model.named_parameters():
-                if name in self.var_names:
-                    param.data = vars[name]
+            for idx, (name, param) in enumerate(model.named_parameters()):
+                assert self.var_names[idx] == name
+                param.data = self.vars[idx]
 
         x = model(x)
         return x
@@ -56,7 +55,11 @@ class VitLearner(nn.Module):
         ----------
         **kwargs
         """
-        return self.vars
+        params = nn.ParameterList()
+        for idx, (name, param) in enumerate(self.model.named_parameters()):
+            assert self.var_names[idx] == name
+            params.append(param)
+        return params
 
     def parameter_names(self):
         """

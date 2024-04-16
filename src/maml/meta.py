@@ -14,7 +14,7 @@ class Meta(nn.Module):
     Meta Learner
     """
 
-    def __init__(self, args, config):
+    def __init__(self, args):
         """
 
         :param args:
@@ -35,13 +35,13 @@ class Meta(nn.Module):
 
     def forward(self, x_spt, y_spt, x_qry, y_qry):
         """
-        :param x_spt:   [b, setsz, c_, h, w]
+        :param x_spt:   [b, setsz, freq_channel, time_dim]
         :param y_spt:   [b, setsz]
-        :param x_qry:   [b, querysz, c_, h, w]
+        :param x_qry:   [b, querysz, freq_channel, time_dim]
         :param y_qry:   [b, querysz]
         :return:
         """
-        task_num, setsz, c_, h, w = x_spt.size()
+        task_num, setsz, freq_channel, time_dim = x_spt.size()
         querysz = x_qry.size(1)
 
         losses_q = [0 for _ in range(self.update_step + 1)]  # losses_q[i] is the loss on step i
