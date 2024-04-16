@@ -15,7 +15,7 @@ class VitLearner(nn.Module):
         Initialize the ViT
         """
         super(VitLearner, self).__init__()
-        model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=16, dim=16, depth=4, heads=4, mlp_dim=4,
+        model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=1, dim=16, depth=4, heads=4, mlp_dim=4,
                     pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2)
         self.model = model
         self.vars = nn.ParameterList()
@@ -37,7 +37,7 @@ class VitLearner(nn.Module):
         if vars is None:
             model = self.model
         else:
-            model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=16, dim=16, depth=4, heads=4, mlp_dim=4,
+            model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=1, dim=16, depth=4, heads=4, mlp_dim=4,
                         pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2)
             for idx, (name, param) in enumerate(model.named_parameters()):
                 assert self.var_names[idx] == name
