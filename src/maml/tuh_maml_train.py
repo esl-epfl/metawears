@@ -6,7 +6,7 @@ from torch.optim import lr_scheduler
 import random, sys, pickle
 import argparse
 from tqdm import tqdm
-from dataset import get_data_loader
+from src.dataset import get_data_loader
 from meta import Meta
 from few_shot.prototypical_batch_sampler import PrototypicalBatchSampler
 
@@ -112,6 +112,16 @@ if __name__ == '__main__':
     argparser.add_argument('--update_lr', type=float, help='task-level inner update learning rate', default=0.01)
     argparser.add_argument('--update_step', type=int, help='task-level inner update steps', default=5)
     argparser.add_argument('--update_step_test', type=int, help='update steps for finetunning', default=10)
+    argparser.add_argument('-its', '--iterations',
+                        type=int,
+                        help='number of episodes per epoch, default=100',
+                        default=100)
+
+    argparser.add_argument('-cTr', '--classes_per_it_tr',
+                        type=int,
+                        help='number of random classes per episode for training, default=60',
+                        default=2)
+
     argparser.add_argument('-nsTr', '--num_support_tr',
                         type=int,
                         help='number of samples per class to use as support for training, default=5',
@@ -121,6 +131,21 @@ if __name__ == '__main__':
                         type=int,
                         help='number of samples per class to use as query for training, default=5',
                         default=5)
+
+    argparser.add_argument('-cVa', '--classes_per_it_val',
+                        type=int,
+                        help='number of random classes per episode for validation, default=5',
+                        default=2)
+
+    argparser.add_argument('-nsVa', '--num_support_val',
+                        type=int,
+                        help='number of samples per class to use as support for validation, default=5',
+                        default=5)
+
+    argparser.add_argument('-nqVa', '--num_query_val',
+                        type=int,
+                        help='number of samples per class to use as query for validation, default=15',
+                        default=1024)
 
     args = argparser.parse_args()
 
