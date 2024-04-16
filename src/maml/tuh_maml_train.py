@@ -57,6 +57,10 @@ def main():
 
     for epoch in range(args.epoch):
         # fetch meta_batchsz num of episode each time
+        x_support_set_stack = []
+        x_query_set_stack = []
+        y_support_set_stack = []
+        y_query_set_stack = []
         tr_iter = iter(tr_dataloader)
         for step, batch in tqdm(enumerate(tr_iter)):
             x_batch, y_batch = batch
@@ -76,12 +80,21 @@ def main():
 
             x_support_set = x_support_set.reshape((x_support_set.shape[0], 1, -1, x_support_set.shape[3]))
             x_query_set = x_query_set.reshape((x_query_set.shape[0], 1, -1, x_query_set.shape[3]))
-            print("Shapes")
-            print(x_support_set.shape, y_support_set.shape, x_query_set.shape, y_query_set.shape)
-            # accs = maml(x_support_set, y_support_set, x_query_set, y_query_set)
 
-            if step % 30 == 0:
-                print('step:', step, '\ttraining acc:', accs)
+            x_support_set_stack.append(x_support_set)
+            x_query_set_stack.append(x_query_set)
+            y_support_set_stack.append(y_support_set)
+            y_query_set_stack.append(y_query_set)
+
+        x_support_set = torch.stack(x_support_set_stack)
+        x_query_set = torch.stack(x_query_set_stack)
+        y_support_set = torch.stack(y_support_set_stack)
+        y_query_set = torch.stack(y_query_set_stack)
+        print("Shapes: ", x_support_set.shape, x_query_set.shape, y_support_set.shape, y_query_set.shape)
+        # accs = maml(x_support_set, y_support_set, x_query_set, y_query_set)
+
+        # if epoch % 30 == 0:
+        #     print('step:', epoch, '\ttraining acc:', accs)
 
             # if step % 500 == 0:  # evaluation
             #     db_test = DataLoader(mini_test, 1, shuffle=True, num_workers=1, pin_memory=True)
