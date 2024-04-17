@@ -50,7 +50,7 @@ class Meta(nn.Module):
         for i in range(task_num):
 
             # 1. run the i-th task and compute loss for k=0
-            logits = self.net(x_spt[i], vars=None)
+            logits, _ = self.net(x_spt[i], vars=None)
             logits = logits.squeeze(-1)
             loss = F.binary_cross_entropy_with_logits(logits, y_spt[i])
             # compute the grad and update theta parameters with the gradients

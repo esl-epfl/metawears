@@ -45,7 +45,7 @@ class VitLearner(nn.Module):
                 model._parameters[name] = vars[idx]
 
         x = model(x)
-        return x
+        return x, model
 
     def parameters(self, **kwargs):
         """
@@ -67,3 +67,19 @@ class VitLearner(nn.Module):
         return the parameter names
         """
         return self.var_names
+
+    def zero_grad(self, vars=None):
+        """
+
+        :param vars:
+        :return:
+        """
+        with torch.no_grad():
+            if vars is None:
+                for p in self.model.parameters():
+                    if p.grad is not None:
+                        p.grad.zero_()
+            else:
+                for p in vars:
+                    if p.grad is not None:
+                        p.grad.zero_()
