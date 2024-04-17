@@ -44,7 +44,7 @@ class VitLearner(nn.Module):
                 param.data = self.vars[idx]
 
         x = model(x)
-        return x
+        return x, model
 
     def parameters(self, **kwargs):
         """
