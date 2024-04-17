@@ -41,10 +41,10 @@ class VitLearner(nn.Module):
                         pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2)
             for idx, (name, param) in enumerate(model.named_parameters()):
                 assert self.var_names[idx] == name
-                param.data = self.vars[idx]
+                param.data = vars[idx].clone()
 
         x = model(x)
-        return x, model
+        return x
 
     def parameters(self, **kwargs):
         """
