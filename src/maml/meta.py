@@ -65,8 +65,9 @@ class Meta(nn.Module):
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
                 losses_q[0] += loss_q
 
-                predict_prob = F.sigmoid(logits_q)
-                auc = roc_auc_score(y_qry[i], predict_prob)
+                predict_prob = F.sigmoid(logits_q).clone().detach().cpu().numpy()
+                true_label = y_qry[i].clone().detach().cpu().numpy()
+                auc = roc_auc_score(true_label, predict_prob)
                 corrects[0] = corrects[0] + auc
 
             # this is the loss and accuracy after the first update
@@ -77,8 +78,9 @@ class Meta(nn.Module):
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
                 losses_q[1] += loss_q
                 # [setsz]
-                predict_prob = F.sigmoid(logits_q)
-                auc = roc_auc_score(y_qry[i], predict_prob)
+                predict_prob = F.sigmoid(logits_q).clone().detach().cpu().numpy()
+                true_label = y_qry[i].clone().detach().cpu().numpy()
+                auc = roc_auc_score(true_label, predict_prob)
                 corrects[1] = corrects[1] + auc
 
             for k in range(1, self.update_step):
@@ -98,8 +100,9 @@ class Meta(nn.Module):
                 losses_q[k + 1] += loss_q
 
                 with torch.no_grad():
-                    predict_prob = F.sigmoid(logits_q)
-                    auc = roc_auc_score(y_qry[i], predict_prob)
+                    predict_prob = F.sigmoid(logits_q).clone().detach().cpu().numpy()
+                    true_label = y_qry[i].clone().detach().cpu().numpy()
+                    auc = roc_auc_score(true_label, predict_prob)
                     corrects[k + 1] = corrects[k + 1] + auc
 
         # end of all tasks
