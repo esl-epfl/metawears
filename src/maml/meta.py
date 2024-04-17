@@ -56,7 +56,9 @@ class Meta(nn.Module):
             # compute the grad and update theta parameters with the gradients
             grad = torch.autograd.grad(loss, self.net.parameters())
             fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, self.net.parameters())))
-
+            fast_params = nn.ParameterList()
+            for param in fast_weights:
+                fast_params.append(param)
             # this is the loss and accuracy before first update
             with torch.no_grad():
                 # [setsz, nway]
@@ -73,7 +75,7 @@ class Meta(nn.Module):
             # this is the loss and accuracy after the first update
             with torch.no_grad():
                 # [setsz, nway]
-                logits_q = self.net(x_qry[i], fast_weights)
+                logits_q = self.net(x_qry[i], fast_params)
                 logits_q = logits_q.squeeze(-1)
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
                 losses_q[1] += loss_q
@@ -85,15 +87,17 @@ class Meta(nn.Module):
 
             for k in range(1, self.update_step):
                 # 1. run the i-th task and compute loss for k=1~K-1
-                logits = self.net(x_spt[i], fast_weights)
+                logits = self.net(x_spt[i], fast_params)
                 logits = logits.squeeze(-1)
                 loss = F.binary_cross_entropy_with_logits(logits, y_spt[i])
                 # 2. compute grad on theta_pi
-                grad = torch.autograd.grad(loss, fast_weights)
+                grad = torch.autograd.grad(loss, fast_params)
                 # 3. theta_pi = theta_pi - train_lr * grad
                 fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
-
-                logits_q = self.net(x_qry[i], fast_weights)
+                fast_params = nn.ParameterList()
+                for param in fast_weights:
+                    fast_params.append(param)
+                logits_q = self.net(x_qry[i], fast_params)
                 logits_q = logits_q.squeeze(-1)
                 # loss_q will be overwritten and just keep the loss_q on last update step.
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
@@ -120,6 +124,12 @@ class Meta(nn.Module):
         accs = np.array(corrects) / (task_num)
 
         return accs
+
+    def get_model_copy(self, fast_weight):
+        new_model = deepcopy(self.net)
+        for (value), (value_fw) in zip(new_model.parameters(), fast_weight):
+            value.data = value_fw.data
+        return new_model
 
     def finetunning(self, x_spt, y_spt, x_qry, y_qry):
         """
