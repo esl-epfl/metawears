@@ -18,6 +18,7 @@ class VitLearner(nn.Module):
         model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=1, dim=16, depth=4, heads=4, mlp_dim=4,
                     pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2)
         self.model = model
+        self.device = torch.device('cuda')
         self.vars = nn.ParameterList()
         # save a list as all the parameters that need to be optimized
         self.var_names = []
@@ -38,10 +39,10 @@ class VitLearner(nn.Module):
             model = self.model
         else:
             model = ViT(image_size=(3200, 15), patch_size=(80, 5), num_classes=1, dim=16, depth=4, heads=4, mlp_dim=4,
-                        pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2)
+                        pool='cls', channels=1, dim_head=4, dropout=0.2, emb_dropout=0.2).to(self.device)
             for idx, (name, param) in enumerate(model.named_parameters()):
                 assert self.var_names[idx] == name
-                param.data = vars[idx].clone()
+                model._parameters[name] = vars[idx]
 
         x = model(x)
         return x

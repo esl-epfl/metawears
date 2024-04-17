@@ -90,7 +90,6 @@ def main():
         x_query_set = torch.stack(x_query_set_stack)
         y_support_set = torch.stack(y_support_set_stack)
         y_query_set = torch.stack(y_query_set_stack)
-        print("Shapes: ", x_support_set.shape, x_query_set.shape, y_support_set.shape, y_query_set.shape)
         accs = maml(x_support_set, y_support_set, x_query_set, y_query_set)
         print('step:', epoch, '\ttraining AUC:', accs)
 
