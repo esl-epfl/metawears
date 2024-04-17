@@ -7,7 +7,7 @@ from torch import optim
 import numpy as np
 from copy import deepcopy
 from vit_learner import VitLearner
-
+from sklearn.metrics import roc_auc_score
 
 class Meta(nn.Module):
     """
@@ -45,7 +45,7 @@ class Meta(nn.Module):
         querysz = x_qry.size(1)
 
         losses_q = [0 for _ in range(self.update_step + 1)]  # losses_q[i] is the loss on step i
-        corrects = [0 for _ in range(self.update_step + 1)]
+        corrects = [0.0 for _ in range(self.update_step + 1)]
 
         for i in range(task_num):
 
@@ -65,9 +65,9 @@ class Meta(nn.Module):
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
                 losses_q[0] += loss_q
 
-                pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                correct = torch.eq(pred_q, y_qry[i]).sum().item()
-                corrects[0] = corrects[0] + correct
+                predict_prob = F.sigmoid(logits_q)
+                auc = roc_auc_score(y_qry[i], predict_prob)
+                corrects[0] = corrects[0] + auc
 
             # this is the loss and accuracy after the first update
             with torch.no_grad():
@@ -77,9 +77,9 @@ class Meta(nn.Module):
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
                 losses_q[1] += loss_q
                 # [setsz]
-                pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                correct = torch.eq(pred_q, y_qry[i]).sum().item()
-                corrects[1] = corrects[1] + correct
+                predict_prob = F.sigmoid(logits_q)
+                auc = roc_auc_score(y_qry[i], predict_prob)
+                corrects[1] = corrects[1] + auc
 
             for k in range(1, self.update_step):
                 # 1. run the i-th task and compute loss for k=1~K-1
@@ -98,9 +98,9 @@ class Meta(nn.Module):
                 losses_q[k + 1] += loss_q
 
                 with torch.no_grad():
-                    pred_q = F.softmax(logits_q, dim=1).argmax(dim=1)
-                    correct = torch.eq(pred_q, y_qry[i]).sum().item()  # convert to numpy
-                    corrects[k + 1] = corrects[k + 1] + correct
+                    predict_prob = F.sigmoid(logits_q)
+                    auc = roc_auc_score(y_qry[i], predict_prob)
+                    corrects[k + 1] = corrects[k + 1] + auc
 
         # end of all tasks
         # sum over all losses on query set across all tasks
@@ -114,7 +114,7 @@ class Meta(nn.Module):
         # 	print(torch.norm(p).item())
         self.meta_optim.step()
 
-        accs = np.array(corrects) / (querysz * task_num)
+        accs = np.array(corrects) / (task_num)
 
         return accs
 

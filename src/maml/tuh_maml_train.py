@@ -92,9 +92,7 @@ def main():
         y_query_set = torch.stack(y_query_set_stack)
         print("Shapes: ", x_support_set.shape, x_query_set.shape, y_support_set.shape, y_query_set.shape)
         accs = maml(x_support_set, y_support_set, x_query_set, y_query_set)
-
-        if epoch % 30 == 0:
-            print('step:', epoch, '\ttraining acc:', accs)
+        print('step:', epoch, '\ttraining AUC:', accs)
 
             # if step % 500 == 0:  # evaluation
             #     db_test = DataLoader(mini_test, 1, shuffle=True, num_workers=1, pin_memory=True)
