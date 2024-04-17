@@ -61,6 +61,7 @@ class Meta(nn.Module):
             with torch.no_grad():
                 # [setsz, nway]
                 logits_q, _ = self.net(x_qry[i], self.net.parameters())
+                del _
                 logits_q = logits_q.squeeze(-1)
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
                 losses_q[0] += loss_q
@@ -73,7 +74,8 @@ class Meta(nn.Module):
             # this is the loss and accuracy after the first update
             with torch.no_grad():
                 # [setsz, nway]
-                logits_q, _ = self.net(x_qry[i], fast_params)
+                logits_q, _ = self.net(x_qry[i], fast_weights)
+                del _
                 logits_q = logits_q.squeeze(-1)
                 loss_q = F.binary_cross_entropy_with_logits(logits_q, y_qry[i])
                 losses_q[1] += loss_q
@@ -89,7 +91,7 @@ class Meta(nn.Module):
                 logits = logits.squeeze(-1)
                 loss = F.binary_cross_entropy_with_logits(logits, y_spt[i])
                 # 2. compute grad on theta_pi
-                grad = torch.autograd.grad(loss, new_model.parameters())
+                grad = torch.autograd.grad(loss, new_model.parameters(), create_graph=True, materialize_grads=True)
                 # 3. theta_pi = theta_pi - train_lr * grad
                 fast_weights = list(map(lambda p: p[1] - self.update_lr * p[0], zip(grad, fast_weights)))
 
@@ -112,9 +114,9 @@ class Meta(nn.Module):
         # optimize theta parameters
         self.meta_optim.zero_grad()
         loss_q.backward()
-        # print('meta update')
-        # for p in self.net.parameters()[:5]:
-        # 	print(torch.norm(p).item())
+        print('meta update')
+        for p in self.net.parameters()[:5]:
+            print(torch.norm(p).item())
         self.meta_optim.step()
 
         accs = np.array(corrects) / (task_num)
