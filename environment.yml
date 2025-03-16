@@ -1,0 +1,22 @@
+name: metawears
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - matplotlib
+  - seaborn
+  - jupyter
+  - scikit-learn
+  - scipy
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pyedflib
+  - pytorch-model-summary
+
+  - pip:
+    - einops
+    - tqdm
