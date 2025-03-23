@@ -24,7 +24,6 @@ import torch
 import os
 from vit_pytorch.vit import ViT
 import pickle
-from torchsummary import summary
 
 
 
@@ -102,9 +101,9 @@ def save_list_to_file(path, thelist):
 def get_support_set(n_sample, data_dir):
     support_set = []
     labels = []
-    for label, class_support_set in enumerate([non_seizure_support_set_siena, seizure_support_set_siena]):
+    for label, class_support_set in enumerate([non_seizure_support_set, seizure_support_set]):
         for filename in np.random.permutation(class_support_set)[:n_sample]:
-            filepath = os.path.join(data_dir + "/task-binary_datatype-eval_STFT/",
+            filepath = os.path.join(data_dir + "/task-binary_datatype-train_STFT/",
                                     filename + ".pkl")
             with open(filepath, 'rb') as f:
                 data_pkl = pickle.load(f)
@@ -223,19 +222,19 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
         # torch.save(model.state_dict(), os.path.join(model_path, "epoch{}.pth".format(epoch)))
         if val_dataloader is None:
             continue
-        auc = test(opt, val_dataloader, model, print_results=False, return_results=True)
-        postfix = ' (Best)' if auc >= best_auc else ' (Best: {})'.format(
-            best_auc)
-        print('Val auc: {}{}'.format(auc, postfix))
-        if auc >= best_auc:
-            torch.save(model.state_dict(), best_model_path)
-            best_auc = auc
-            best_state = model.state_dict()
+        # auc = test(opt, val_dataloader, model, print_results=False, return_results=True)
+        # postfix = ' (Best)' if auc >= best_auc else ' (Best: {})'.format(
+        #     best_auc)
+        # print('Val auc: {}{}'.format(auc, postfix))
+        # if auc >= best_auc:
+        #     torch.save(model.state_dict(), best_model_path)
+        #     best_auc = auc
+        #     best_state = model.state_dict()
 
-        continue
+        
         val_iter = iter(val_dataloader)
         model.eval()
-        for batch in val_iter:
+        for batch in tqdm(val_iter):
             x_batch, y_batch = batch
             x_support_set = torch.concatenate(
                 (x_batch[:opt.num_support_tr], x_batch[2 * opt.num_support_tr:3 * opt.num_support_tr]))
@@ -458,9 +457,9 @@ if __name__ == '__main__':
     options = get_parser().parse_args()
     if torch.cuda.is_available() and not options.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-    # main()
+    main()
 
-    if options.finetune:
-        finetune(options)
-    else:
-        eval(options)
+    # if options.finetune:
+    #     finetune(options)
+    # else:
+    #     eval(options)
