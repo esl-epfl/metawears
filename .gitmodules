@@ -1,6 +1,6 @@
 [submodule "sz-validation-framework"]
 	path = sz-validation-framework
-	url = git@github.com:esl-epfl/sz-validation-framework.git
+	url = https://github.com/esl-epfl/sz-validation-framework.git
 [submodule "hw-inference/epilepsy_C/SYLT-FFT"]
 	path = hw-inference/epilepsy_C/SYLT-FFT
 	url = https://github.com/sylt-collab/SYLT-FFT
