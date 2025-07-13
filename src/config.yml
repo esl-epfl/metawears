@@ -1,0 +1,41 @@
+dataset_root: "../dataset"
+TUSZ_data_dir: "/home/amirshah/EPFL/EpilepsyTransformer/TUSZv2/preprocess"
+experiment_root: "../output/with_validation"
+base_learner_root: "../output/with_validation"
+finetune: false
+skip_base_learner: false
+skip_finetune: false
+data_root: "/home/amirshah/EPFL/EpilepsyTransformer/TUSZv2/preprocess"
+epochs: 2
+learning_rate: 0.001
+lr_scheduler_step: 20
+lr_scheduler_gamma: 0.5
+iterations: 100
+classes_per_it_tr: 2
+num_support_tr: 5
+num_query_tr: 5
+classes_per_it_val: 2
+num_support_val: 5
+num_query_val: 1024
+manual_seed: 3
+patients:
+- 0
+excluded_patients:
+- -1
+finetune_patients:
+- -1
+validation_patients:
+- -1
+cuda: true
+sample_rate: 256
+siena_raw_data_directory: "/home/amirshah/EPFL/physionet.org/files/siena-scalp-eeg/1.0.0"
+siena_data_dir: "/home/amirshah/EPFL/EpilepsyTransformer/input/Siena"
+label_type: "csv_bi"
+cpu_num: 4
+data_type: "eval"
+task_type: "binary"
+slice_length: 12
+eeg_type: "stft"
+selected_channel_id: -1
+global_model: false
+siena_model: false
