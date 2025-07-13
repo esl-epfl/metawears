@@ -32,7 +32,7 @@ cd hw-inference/epilepsy_C/
 This single command compiles all necessary files and creates an executable to run on your local machine:
 
 ```bash
-gcc -O3 -o epilepsy_detector.out main.c epilepsyTransformer.c transformer_C/*.c data_cpp/*.cpp -I. -ISYLT-FFT -Itransformer_C -lm -lstdc++
+gcc -O3 -o epilepsy_detector.out main.c epilepsyTransformer.c transformer_C/*.c -I. -ISYLT-FFT -Itransformer_C -lm -lstdc++
 ```
 - -O3: Enables high-level compiler optimizations.
 - -lstdc++: Links the standard C++ library, which is needed because the data files have a .cpp extension.
@@ -40,6 +40,28 @@ gcc -O3 -o epilepsy_detector.out main.c epilepsyTransformer.c transformer_C/*.c 
 After successful compilation, you can run the program directly from your terminal:
 ```bash
  ./epilepsy_detector.out
+```
+
+When you run the program, you should see the following output, including the performance metrics and the classification result. The exact timing values may vary slightly depending on your machine.
+
+```
+Starting STFT preprocessing...
+STFT finished.
+Starting transformer inference...
+Inference finished.
+Starting prototype distance calculation...
+Prototype calculation finished.
+
+--- Performance Metrics ---
+STFT Preprocessing Time: 
+Transformer Inference Time: 
+Prototype Calculation Time:
+---------------------------
+Total Application Time:
+---------------------------
+Distances :
+From the prototype of class 0 = 462
+From the prototype of class 1 = 107749
 ```
 
 
@@ -53,4 +75,49 @@ After successful compilation, you can run the program directly from your termina
 ```bash
  ./mobilenet.out
  ```
+
+The expected output:
+```
+start forward_mobilenet inference ........
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################Bottleneck#############################
+############################AVG Pooling############################
+Data [0] = 8.98
+Data [1] = 14.20
+Data [2] = 13.22
+Data [3] = 0.00
+Data [4] = 0.00
+Data [5] = 18.24
+Data [6] = 0.00
+Data [7] = 0.00
+Data [8] = 0.00
+Data [9] = 0.00
+Data [10] = 12.41
+Data [11] = 0.00
+Data [12] = 0.00
+Data [13] = 9.65
+Data [14] = 13.47
+Data [15] = 0.00
+Data [16] = 0.00
+Data [17] = 0.00
+Data [18] = 0.00
+Data [19] = 14.24
+
+--- MobileNet Performance Breakdown ---
+Stage 1 (Initial Conv) Time: 
+Stage 2 (Bottlenecks) Time: 
+Stage 3 (Classifier) Time:   
+---------------------------------------
+Total Inference Time:      
+---------------------------------------
+-----------------------------End forward---------------------------------
+```
 
