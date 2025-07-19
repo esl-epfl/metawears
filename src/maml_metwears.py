@@ -12,7 +12,7 @@ from sklearn.metrics import roc_auc_score
 warnings.filterwarnings("ignore", category=UserWarning, message="Failed to load image Python extension")
 
 from utils.parser_util import get_parser
-from dataset import get_data_loader
+from dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
 from vit_pytorch.vit import ViT
 
 def init_seed(opt):
@@ -49,6 +49,117 @@ def save_list_to_file(path, thelist):
     with open(path, 'w') as f:
         for item in thelist:
             f.write(f"{item}\n")
+
+
+def adapt_on_patient(opt, meta_lr, fast_lr):
+    """
+    Fine-tunes (adapts) the meta-trained model on a new patient's data.
+    """
+    # Create a specific directory for this fine-tuning experiment
+    exp_root = os.path.join(opt.experiment_root, '_'.join(str(p) for p in opt.finetune_patients))
+    if not os.path.exists(exp_root):
+        os.makedirs(exp_root)
+
+    init_seed(opt)
+
+    # 1. Load the fine-tuning and validation data for specific Siena patients
+    tr_dataset, tr_label = get_data_loader_siena_finetune(
+        patient_ids=opt.finetune_patients,
+        save_dir=opt.siena_data_dir
+    )
+    tr_dataloader = torch.utils.data.DataLoader(tr_dataset, batch_size=opt.classes_per_it_tr * (opt.num_support_tr + opt.num_query_tr), shuffle=True, num_workers=6)
+
+    val_dataloader = get_data_loader_siena(
+        batch_size=opt.classes_per_it_val * (opt.num_support_val + opt.num_query_val),
+        patient_ids=opt.validation_patients,
+        save_dir=opt.siena_data_dir
+    )
+
+    # 2. Initialize a new model and load the weights from the meta-trained (base) model
+    model = init_vit(opt)
+    if not opt.skip_base_learner:
+        model_path = os.path.join(opt.base_learner_root, 'best_model.pth')
+        model.load_state_dict(torch.load(model_path))
+        print(f"Loaded base model from {model_path}")
+
+    # 3. Run the training loop to adapt the model
+    print(f"Adapting model on patients: {opt.finetune_patients}")
+    train_maml(
+        opt=opt,
+        tr_dataloader=tr_dataloader,
+        val_dataloader=val_dataloader,
+        model=model,
+        meta_lr=meta_lr,
+        fast_lr=fast_lr,
+        exp_root=exp_root  # Save the adapted model in its own directory
+    )
+
+
+def evaluate_adapted_model(opt, fast_lr):
+    """
+    Evaluates a fine-tuned MAML model on unseen patients.
+    """
+    device = 'cuda:0' if torch.cuda.is_available() and opt.cuda else 'cpu'
+    loss_func = torch.nn.CrossEntropyLoss()
+    
+    # 1. Load the specific adapted model for the fine-tuned patients
+    model = init_vit(opt)
+    exp_root = os.path.join(opt.experiment_root, '_'.join(str(p) for p in opt.finetune_patients))
+    model_path = os.path.join(exp_root, 'best_model.pth')
+    model.load_state_dict(torch.load(model_path))
+    print(f"Loaded adapted model from {model_path} for evaluation.")
+    
+    maml = l2l.algorithms.MAML(model, lr=fast_lr)
+    model.eval()
+
+    # 2. Load the test data from unseen patients
+    all_patients = [0, 1, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
+    test_patient_ids = [p for p in all_patients if p not in opt.excluded_patients]
+    test_dataloader = get_data_loader_siena(
+        batch_size=opt.classes_per_it_val * (opt.num_support_val + opt.num_query_val),
+        patient_ids=test_patient_ids,
+        save_dir=opt.siena_data_dir
+    )
+    
+    print(f"Evaluating on test patients: {test_patient_ids}")
+    
+    # 3. Perform evaluation
+    true_labels = []
+    pred_probs = []
+
+    for batch in tqdm(test_dataloader, desc="Final Evaluation"):
+        x_batch, y_batch = batch
+        split_point = len(x_batch) // 2
+        x_support, y_support = x_batch[:split_point], y_batch[:split_point]
+        x_query, y_query = x_batch[split_point:], y_batch[split_point:]
+
+        x_support, y_support = x_support.to(device), y_support.to(device).long()
+        x_query, y_query = x_query.to(device), y_query.to(device).long()
+
+        x_support = x_support.reshape((x_support.shape[0], 1, -1, x_support.shape[3]))
+        x_query = x_query.reshape((x_query.shape[0], 1, -1, x_query.shape[3]))
+        
+        learner = maml.clone()
+        
+        # Adapt on the support set from the test task
+        support_preds = learner(x_support)
+        support_loss = loss_func(support_preds, y_support)
+        learner.adapt(support_loss)
+        
+        # Evaluate on the query set
+        with torch.no_grad():
+            query_preds = learner(x_query)
+            # Get probabilities for the positive class (seizure) for AUC
+            probs = torch.nn.functional.softmax(query_preds, dim=1)[:, 1]
+            
+            pred_probs.extend(probs.cpu().numpy())
+            true_labels.extend(y_query.cpu().numpy())
+
+    auc_score = roc_auc_score(true_labels, pred_probs)
+    print(f"Final Test AUC on unseen patients: {auc_score:.4f}")
+
+    # You can expand this to save results to a file like in few_shot_train.py
+
 
 def train_maml(opt, tr_dataloader, model, meta_lr, fast_lr, val_dataloader=None, exp_root=None):
     """
@@ -208,9 +319,15 @@ if __name__ == '__main__':
     options = get_parser().parse_args()
     if torch.cuda.is_available() and not options.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-    
-    # For now, this script only demonstrates the meta-training part.
-    # The finetuning and evaluation loops would follow a similar logic to the validation loop,
-    # adapting the loaded meta-trained model on the support set of the new patient
-    # before making predictions on the query set.
-    main()
+
+    # MAML specific learning rates
+    meta_lr = options.learning_rate
+    fast_lr = 0.01
+
+    if options.finetune:
+        # Fine-tune the model on specific patients and then evaluate
+        adapt_on_patient(options, meta_lr=meta_lr * 0.1, fast_lr=fast_lr)
+        evaluate_adapted_model(options, fast_lr=fast_lr)
+    else:
+        # Run the initial meta-training
+        main()

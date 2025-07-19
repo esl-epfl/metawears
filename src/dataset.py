@@ -172,6 +172,11 @@ def get_data_loader_siena_finetune(patient_ids, save_dir=args.siena_data_dir):
         else:
             print('------------------------  error  ------------------------')
             exit(-1)
+    print("size of seizure:")
+    print(len(file_lists['seiz']))
+    print("size of non-seizure:")
+    print(len(file_lists['bckg']))
+    
 
     seiz_len = len(file_lists['seiz'])
     target_len = 10
@@ -295,7 +300,7 @@ def generate_lead_wise_data(edf_file):
     signals, signal_headers, header = read_edf(edf_file)
     file_info = siena_info_df.loc[filename]
     fs = file_info['sampling_frequency']
-    length = file_info['length']
+    length = int(file_info['duration'])
     labels = file_info['labels']
     num_target_samples = int(length * GLOBAL_INFO['sample_rate'])
     signal_list = []
@@ -345,7 +350,7 @@ def generate_lead_wise_data(edf_file):
 
 
 def generate_STFT(pickle_file):
-    save_directory = "{}/task-{}_datatype-{}_STFT".format(args.save_directory, args.task_type, args.data_type)
+    save_directory = "{}/task-{}_datatype-{}_STFT".format(args.siena_data_dir, args.task_type, args.data_type)
 
     nperseg = 256
     noverlap = 64
@@ -390,13 +395,13 @@ def main(args):
     channel_list = ['EEG FP1', 'EEG FP2', 'EEG F3', 'EEG F4', 'EEG F7', 'EEG F8', 'EEG C3', 'EEG C4', 'EEG CZ',
                     'EEG T3', 'EEG T4', 'EEG P3', 'EEG P4', 'EEG O1', 'EEG O2', 'EEG T5', 'EEG T6', 'EEG PZ', 'EEG FZ']
 
-    save_directory = "{}/task-{}_datatype-{}".format(args.save_directory, args.task_type, args.data_type)
+    save_directory = "{}/task-{}_datatype-{}".format(args.siena_data_dir, args.task_type, args.data_type)
     if os.path.isdir(save_directory):
         # os.system("rm -r {}".format(save_directory))
         raise ValueError("The directory is already there!")
     os.system("mkdir -p {}".format(save_directory))
 
-    data_directory = "{}".format(args.data_directory)
+    data_directory = "{}".format(args.siena_raw_data_directory)
 
     if args.task_type == "binary":
         disease_labels = {'bckg': 0, 'seiz': 1}
@@ -425,18 +430,18 @@ def main(args):
 
 
 def make_STFT(args):
-    save_directory = "{}/task-{}_datatype-{}_STFT".format(args.save_directory, args.task_type, args.data_type)
+    save_directory = "{}/task-{}_datatype-{}_STFT".format(args.siena_data_dir, args.task_type, args.data_type)
     if os.path.isdir(save_directory):
         # os.system("rm -r {}".format(save_directory))
         raise ValueError("The directory is already there!")
     os.system("mkdir -p {}".format(save_directory))
 
-    data_directory = "{}/task-{}_datatype-{}".format(args.save_directory, args.task_type, args.data_type)
+    data_directory = "{}/task-{}_datatype-{}".format(args.siena_data_dir, args.task_type, args.data_type)
     pickle_list = []
     for pickle_file in os.listdir(data_directory):
         if pickle_file.endswith(".pkl"):
             pickle_list.append(os.path.join(data_directory, pickle_file))
-
+    print("Number of pickle files: ", len(pickle_list))
     run_multi_process(generate_STFT, pickle_list, n_processes=6)
     # for pickle_file in tqdm(pickle_list[:1]):
     #     generate_STFT(pickle_file)
