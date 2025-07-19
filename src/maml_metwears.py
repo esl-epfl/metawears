@@ -6,6 +6,7 @@ import torch
 import learn2learn as l2l
 from tqdm import tqdm
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 
 # Filter out the specific UserWarning related to torchvision
@@ -44,6 +45,37 @@ def init_vit(opt):
         emb_dropout=0.2
     ).to(device)
     return model
+
+def plot_and_save_metrics(train_loss, val_loss, val_auc, exp_root, prefix=''):
+    """
+    Plots training & validation loss and validation AUC, then saves the figure.
+    """
+    epochs = range(1, len(train_loss) + 1)
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    # Plotting Loss
+    ax1.plot(epochs, train_loss, 'bo-', label='Training Loss')
+    ax1.plot(epochs, val_loss, 'ro-', label='Validation Loss')
+    ax1.set_title(f'{prefix} Training and Validation Loss')
+    ax1.set_xlabel('Epochs')
+    ax1.set_ylabel('Loss')
+    ax1.legend()
+    ax1.grid(True)
+    
+    # Plotting AUC
+    ax2.plot(epochs, val_auc, 'go-', label='Validation AUC')
+    ax2.set_title(f'{prefix} Validation AUC')
+    ax2.set_xlabel('Epochs')
+    ax2.set_ylabel('AUC')
+    ax2.legend()
+    ax2.grid(True)
+    
+    plt.tight_layout()
+    plot_filename = os.path.join(exp_root, f"{prefix.lower().replace(' ', '_')}_metrics.png")
+    plt.savefig(plot_filename)
+    print(f"Saved metrics plot to {plot_filename}")
+    plt.close()
 
 def save_list_to_file(path, thelist):
     with open(path, 'w') as f:
@@ -84,7 +116,7 @@ def adapt_on_patient(opt, meta_lr, fast_lr):
 
     # 3. Run the training loop to adapt the model
     print(f"Adapting model on patients: {opt.finetune_patients}")
-    train_maml(
+    train_losses, val_losses, val_aucs = train_maml(
         opt=opt,
         tr_dataloader=tr_dataloader,
         val_dataloader=val_dataloader,
@@ -93,6 +125,9 @@ def adapt_on_patient(opt, meta_lr, fast_lr):
         fast_lr=fast_lr,
         exp_root=exp_root  # Save the adapted model in its own directory
     )
+
+    plot_and_save_metrics(train_losses, val_losses, val_aucs, options.experiment_root, prefix=f"Adaptation Patient(s) {options.finetune_patients}")
+
 
 
 def evaluate_adapted_model(opt, fast_lr):
@@ -180,6 +215,7 @@ def train_maml(opt, tr_dataloader, model, meta_lr, fast_lr, val_dataloader=None,
     
     train_loss_total = []
     val_loss_total = []
+    val_auc_total = [] 
     best_val_loss = float('inf')
 
     for epoch in range(opt.epochs):
@@ -239,6 +275,9 @@ def train_maml(opt, tr_dataloader, model, meta_lr, fast_lr, val_dataloader=None,
         if val_dataloader:
             model.eval()
             meta_val_loss = 0.0
+            epoch_true_labels = []
+            epoch_pred_probs = []
+
             val_iter = iter(val_dataloader)
             
             for batch in tqdm(val_iter, desc="Validation"):
@@ -260,12 +299,21 @@ def train_maml(opt, tr_dataloader, model, meta_lr, fast_lr, val_dataloader=None,
                 query_preds = learner(x_query)
                 query_loss = loss_func(query_preds, y_query)
                 meta_val_loss += query_loss.item()
+
+                # Get probabilities for AUC calculation
+                probs = torch.nn.functional.softmax(query_preds, dim=1)[:, 1]
+                epoch_pred_probs.extend(probs.cpu().detach().numpy())
+                epoch_true_labels.extend(y_query.cpu().detach().numpy())
             
             avg_val_loss = meta_val_loss / len(val_dataloader)
             val_loss_total.append(avg_val_loss)
+
+            # Calculate and store validation AUC for the epoch
+            epoch_auc = roc_auc_score(epoch_true_labels, epoch_pred_probs)
+            val_auc_total.append(epoch_auc)
             
             postfix = ' (Best)' if avg_val_loss < best_val_loss else f' (Best: {best_val_loss:.4f})'
-            print(f'Avg Meta-Val Loss: {avg_val_loss:.4f}{postfix}')
+            print(f'Avg Meta-Val Loss: {avg_val_loss:.4f} | Val AUC: {epoch_auc:.4f}{postfix}')
             
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
@@ -275,6 +323,9 @@ def train_maml(opt, tr_dataloader, model, meta_lr, fast_lr, val_dataloader=None,
 
     for name in ['train_loss_total', 'val_loss_total']:
         save_list_to_file(os.path.join(exp_root, f"{name}.txt"), locals()[name])
+
+    return train_loss_total, val_loss_total, val_auc_total
+
 
 def main():
     """
@@ -300,7 +351,7 @@ def main():
     meta_lr = options.learning_rate
     fast_lr = 0.01 # Example fast learning rate for inner loop
 
-    train_maml(
+    train_losses, val_losses, val_aucs = train_maml(
         opt=options,
         tr_dataloader=tr_dataloader,
         val_dataloader=val_dataloader,
@@ -308,6 +359,9 @@ def main():
         meta_lr=meta_lr,
         fast_lr=fast_lr
     )
+
+    plot_and_save_metrics(train_losses, val_losses, val_aucs, options.experiment_root, prefix='Meta-Training')
+
 
 if __name__ == '__main__':
     # To run this script, you would execute:
