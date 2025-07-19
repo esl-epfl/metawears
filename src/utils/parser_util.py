@@ -12,7 +12,7 @@ def get_parser():
 
     parser.add_argument('-tusz_data', '--TUSZ_data_dir',
                         type=str,
-                        default='/home/amirshah/EPFL/EpilepsyTransformer/TUSZv2/preprocess')
+                        default='/home/alireza/EPFL/papers')
 
     parser.add_argument('-exp', '--experiment_root',
                         type=str,
