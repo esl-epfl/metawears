@@ -15,7 +15,7 @@ from utils.parser_util import get_parser
 
 GLOBAL_INFO = {}
 
-siena_info_df = pd.read_json('./input/Siena_info.json')
+siena_info_df = pd.read_json('../input/Siena_info.json')
 args = get_parser().parse_args()
 
 

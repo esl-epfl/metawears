@@ -8,6 +8,8 @@ from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
+import pandas as pd
+
 
 # Filter out the specific UserWarning related to torchvision
 warnings.filterwarnings("ignore", category=UserWarning, message="Failed to load image Python extension")
@@ -126,7 +128,8 @@ def adapt_on_patient(opt, meta_lr, fast_lr):
         exp_root=exp_root  # Save the adapted model in its own directory
     )
 
-    plot_and_save_metrics(train_losses, val_losses, val_aucs, options.experiment_root, prefix=f"Adaptation Patient(s) {options.finetune_patients}")
+    plot_and_save_metrics(train_losses, val_losses, val_aucs, exp_root, prefix=f"Adaptation Patient(s) {options.finetune_patients}")
+
 
 
 
@@ -193,7 +196,39 @@ def evaluate_adapted_model(opt, fast_lr):
     auc_score = roc_auc_score(true_labels, pred_probs)
     print(f"Final Test AUC on unseen patients: {auc_score:.4f}")
 
-    # You can expand this to save results to a file like in few_shot_train.py
+    # Placeholder for results
+    results = {
+        "seed": opt.manual_seed,
+        "num_support": opt.num_support_val,
+        "patients": str(opt.finetune_patients), # Using finetune_patients as the equivalent of the support set
+        "finetune_patients": str(opt.finetune_patients),
+        "excluded_patients": str(opt.excluded_patients),
+        "auc": auc_score,
+        "skip_base_learner": False, # MAML script does not perform this ablation
+        "skip_finetune": False      # MAML script does not perform this ablation
+    }
+
+    # Convert the results dictionary to a DataFrame
+    result_df = pd.DataFrame([results])
+
+    # Save results to a CSV file
+    output_filename = "../output/results_with_validation.csv"
+
+    # Check if the file exists
+    try:
+        # Read the existing file
+        existing_df = pd.read_csv(output_filename)
+
+        # Concatenate the new results to the existing DataFrame
+        updated_df = pd.concat([existing_df, result_df], ignore_index=True)
+
+        # Write the updated DataFrame back to the file
+        updated_df.to_csv(output_filename, index=False)
+    except FileNotFoundError:
+        # If the file doesn't exist, create a new file with the DataFrame
+        result_df.to_csv(output_filename, index=False)
+        print(f"Created a new results file: {output_filename}")
+
 
 
 def train_maml(opt, tr_dataloader, model, meta_lr, fast_lr, val_dataloader=None, exp_root=None):
@@ -379,9 +414,17 @@ if __name__ == '__main__':
     fast_lr = 0.01
 
     if options.finetune:
-        # Fine-tune the model on specific patients and then evaluate
+        # This will ONLY run the adaptation step, saving the fine-tuned model.
+        print("--- Starting Patient Adaptation ---")
         adapt_on_patient(options, meta_lr=meta_lr * 0.1, fast_lr=fast_lr)
+
+    elif options.eval:
+        # This will ONLY run the evaluation on an already fine-tuned model.
+        # It requires the same --finetune_patients argument to know which model to load.
+        print("--- Starting Evaluation of Adapted Model ---")
         evaluate_adapted_model(options, fast_lr=fast_lr)
+        
     else:
-        # Run the initial meta-training
+        # This is the default action: run the initial meta-training for the base model.
+        print("--- Starting Base Model Meta-Training ---")
         main()

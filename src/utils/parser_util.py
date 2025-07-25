@@ -136,5 +136,7 @@ def get_parser():
     parser.add_argument('--selected_channel_id', type=int, default=-1)
     parser.add_argument('--global_model', action='store_true', help='enables global model')
     parser.add_argument('--siena_model', action='store_true', help='enables global model')
+    parser.add_argument('--eval', action='store_true', help='Run evaluation on a fine-tuned model')
+
 
     return parser
