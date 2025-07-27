@@ -1,4 +1,4 @@
-name: metawears
+name: metawears-py311-env
 channels:
   - conda-forge
 dependencies:

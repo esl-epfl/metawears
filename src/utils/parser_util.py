@@ -12,7 +12,7 @@ def get_parser():
 
     parser.add_argument('-tusz_data', '--TUSZ_data_dir',
                         type=str,
-                        default='/home/amirshah/EPFL/EpilepsyTransformer/TUSZv2/preprocess')
+                        default='/home/alireza/EPFL/papers')
 
     parser.add_argument('-exp', '--experiment_root',
                         type=str,
@@ -136,5 +136,7 @@ def get_parser():
     parser.add_argument('--selected_channel_id', type=int, default=-1)
     parser.add_argument('--global_model', action='store_true', help='enables global model')
     parser.add_argument('--siena_model', action='store_true', help='enables global model')
+    parser.add_argument('--eval', action='store_true', help='Run evaluation on a fine-tuned model')
+
 
     return parser
