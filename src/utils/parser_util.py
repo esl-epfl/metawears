@@ -137,6 +137,6 @@ def get_parser():
     parser.add_argument('--global_model', action='store_true', help='enables global model')
     parser.add_argument('--siena_model', action='store_true', help='enables global model')
     parser.add_argument('--eval', action='store_true', help='Run evaluation on a fine-tuned model')
-
+    parser.add_argument('--train', action='store_true', help='Run training')
 
     return parser
