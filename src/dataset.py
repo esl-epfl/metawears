@@ -35,10 +35,12 @@ def search_walk(info):
 
 
 class TUHDataset(Dataset):
-    def __init__(self, file_list, transform=None):
+    def __init__(self, file_list, transform=None, snr_db=None):
         self.file_list = file_list
         self.file_length = len(self.file_list)
         self.transform = transform
+        self.snr_db = snr_db
+
 
     def __len__(self):
         return self.file_length
@@ -53,6 +55,37 @@ class TUHDataset(Dataset):
 
             label = data_pkl['label']
             label = 0. if label == "bckg" else 1.
+
+            # If an SNR is specified, add noise to the STFT spectrogram
+            if self.snr_db is not None:
+                 # 1. Get the original signal's power spectrogram and its average power
+                power_signal = np.exp(signals) ** 2
+                signal_power_avg = np.mean(power_signal)
+
+                # 2. Determine the proportion of power for signal and noise in the final mix
+                snr_linear = 10 ** (self.snr_db / 10.0)
+                signal_weight = snr_linear / (snr_linear + 1)
+                noise_weight = 1 / (snr_linear + 1)
+
+                # 3. Calculate the target power for the signal and noise components
+                target_signal_power = signal_power_avg * signal_weight
+                target_noise_power = signal_power_avg * noise_weight
+                
+                # 4. Generate a template for white noise power
+                noise_power_template = np.random.rand(*signals.shape)
+                noise_power_template_avg = np.mean(noise_power_template)
+                
+                # 5. Scale both the original signal and the noise to their target power levels
+                # We scale the power spectrograms first, then combine them.
+                scaled_signal_power = power_signal * (target_signal_power / signal_power_avg)
+                scaled_noise_power = noise_power_template * (target_noise_power / noise_power_template_avg)
+                
+                # 6. Add the scaled components to get the final noisy power spectrogram
+                power_noisy = scaled_signal_power + scaled_noise_power
+                
+                # 7. Convert back to log-amplitude for the model
+                signals = np.log(np.sqrt(power_noisy) + 1e-10).astype(np.float32)
+
         return signals, label
 
 
@@ -123,7 +156,7 @@ def get_data_loader(batch_size, save_dir=args.TUSZ_data_dir):
     return train_data, val_data, test_data, train_label, val_label, test_label
 
 
-def get_data_loader_siena(batch_size, patient_ids, save_dir=args.siena_data_dir):
+def get_data_loader_siena(batch_size, patient_ids, save_dir=args.siena_data_dir, snr_db=None):
     file_dir = os.path.join(save_dir, 'task-binary_datatype-eval_STFT')
 
     file_lists = {'bckg': [], 'seiz': []}
@@ -148,7 +181,7 @@ def get_data_loader_siena(batch_size, patient_ids, save_dir=args.siena_data_dir)
             transforms.ToTensor(),
         ]
     )
-    test_data = TUHDataset(test_data, transform=test_transforms)
+    test_data = TUHDataset(test_data, transform=test_transforms, snr_db=snr_db)
 
     test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=False, num_workers=6)
 

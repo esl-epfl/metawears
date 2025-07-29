@@ -371,7 +371,8 @@ def test(opt, test_dataloader, model, print_results=False, return_results=False)
         "patients": opt.patients,
         "finetune_patients": opt.finetune_patients,
         "excluded_patients": opt.excluded_patients,
-        "auc": roc_auc_score(true_label, predict_prob)
+        "auc": roc_auc_score(true_label, predict_prob),
+        "snr": opt.snr,
     }
 
     if print_results:
@@ -414,7 +415,8 @@ def eval(options):
     test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
     test_dataloader = get_data_loader_siena(batch_size=options.num_query_val,
                                             patient_ids=test_patient_ids,
-                                            save_dir=options.siena_data_dir)
+                                            save_dir=options.siena_data_dir,
+                                            snr_db=options.snr)
     model = init_vit(options)
     if options.skip_finetune:
         exp_root = options.base_learner_root
