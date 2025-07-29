@@ -11,7 +11,7 @@ num_support_val_values=("1" "3" "5" "10" "15" "20")
 # Original list
 original_list=(0 1 3 5 6 7 9 10 12 17)
 # Loop for four times
-for iteration in {1..2}; do
+for iteration in {1..20}; do
     echo "Iteration $iteration:"
     # Shuffle the list
     shuffled_list=($(shuf -e "${original_list[@]}"))
@@ -21,21 +21,31 @@ for iteration in {1..2}; do
     p2=${shuffled_list[1]}
     p3=${shuffled_list[2]}
     p4=${shuffled_list[3]}
+    p5=${shuffled_list[4]}
+    p6=${shuffled_list[5]}
+
     echo "p1: $p1"
     echo "p2: $p2"
     echo "p3: $p3"
     echo "p4: $p4"
+    echo "p5: $p5"
+    echo "p6: $p6"
+
 
     # Loop over manual_seed values
     for seed in "${manual_seed_values[@]}"; do
         # Loop over num_support_val values
-        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" --validation_patients "$p1" --finetune_patients "$p2"  --epochs 50
-        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" "$p3" --validation_patients "$p1" --finetune_patients "$p2" "$p3" --epochs 50
-        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" "$p3" "$p4" --validation_patients "$p1" --finetune_patients "$p2" "$p3" "$p4" --epochs 50
+        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" --validation_patients "$p1" --finetune_patients "$p2"  --epochs 25
+        # python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" "$p3"  --validation_patients "$p1" --finetune_patients "$p2" "$p3" --epochs 25
+        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" "$p3" "$p4" --validation_patients "$p1" --finetune_patients "$p2" "$p3" "$p4" --epochs 25
+        # python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" "$p3" "$p4" "$p5" --validation_patients "$p1" --finetune_patients "$p2" "$p3" "$p4" "$p5" --epochs 20
+        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --finetune --patients "$p2" "$p3" "$p4" "$p5" "$p6" --validation_patients "$p1" --finetune_patients "$p2" "$p3" "$p4" "$p5" "$p6" --epochs 25
 
-        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" --finetune_patients "$p2" --excluded_patients "$p1" "$p2" "$p3" "$p4"
-        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" "$p3" --finetune_patients "$p2" "$p3" --excluded_patients "$p1" "$p2" "$p3" "$p4"
-        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" "$p3"  "$p4" --finetune_patients "$p2" "$p3"  "$p4"  --excluded_patients "$p1" "$p2" "$p3" "$p4"
+        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" --finetune_patients "$p2" --excluded_patients "$p1" "$p2" "$p3" "$p4" "$p5" "$p6"
+        # python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" "$p3" --finetune_patients "$p2" "$p3" --excluded_patients "$p1" "$p2" "$p3" "$p4"  "$p5" "$p6"
+        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" "$p3"  "$p4" --finetune_patients "$p2" "$p3"  "$p4"  --excluded_patients "$p1" "$p2" "$p3" "$p4" "$p5" "$p6"
+        # python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" "$p3" "$p4" "$p5" --finetune_patients "$p2" "$p3" "$p4" "$p5" --excluded_patients "$p1" "$p2" "$p3" "$p4"  "$p5" "$p6"
+        python $SCRIPT_TO_RUN --siena_data_dir $SIENA_DATA_PATH --eval --manual_seed "$seed" --num_support_val 5 --patients "$p2" "$p3" "$p4" "$p5" "$p6" --finetune_patients "$p2" "$p3" "$p4" "$p5" "$p6" --excluded_patients "$p1" "$p2" "$p3" "$p4" "$p5" "$p6"
 
         if [ "$SCRIPT_TO_RUN" == "few_shot_train.py" ]; then
             for num_support in "${num_support_val_values[@]}"; do
