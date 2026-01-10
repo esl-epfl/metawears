@@ -14,9 +14,9 @@ import pandas as pd
 # Filter out the specific UserWarning related to torchvision
 warnings.filterwarnings("ignore", category=UserWarning, message="Failed to load image Python extension")
 
-from utils.parser_util import get_parser
-from dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
-from vit_pytorch.vit import ViT
+from ..utils.parser_util import get_parser
+from ..dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
+from ..vit_pytorch.vit import ViT
 
 def init_seed(opt):
     """

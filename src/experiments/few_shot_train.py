@@ -7,14 +7,14 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, message="Failed to load image Python extension")
 # TODO solve the CUDA version issue
 
-from few_shot.prototypical_batch_sampler import PrototypicalBatchSampler
-from few_shot.prototypical_loss import prototypical_loss as loss_fn
-from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
-from utils.parser_util import get_parser
-from dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
-from few_shot.support_set_const import seizure_support_set, non_seizure_support_set
-from few_shot.support_set_const import seizure_support_set_siena, non_seizure_support_set_siena
-from utils.utils import thresh_max_f1
+from ..few_shot.prototypical_batch_sampler import PrototypicalBatchSampler
+from ..few_shot.prototypical_loss import prototypical_loss as loss_fn
+from ..few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
+from ..utils.parser_util import get_parser
+from ..dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
+from ..few_shot.support_set_const import seizure_support_set, non_seizure_support_set
+from ..few_shot.support_set_const import seizure_support_set_siena, non_seizure_support_set_siena
+from ..utils.utils import thresh_max_f1
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, f1_score
 
 from tqdm import tqdm
@@ -22,9 +22,9 @@ import numpy as np
 import pandas as pd
 import torch
 import os
-from vit_pytorch.vit import ViT
+from ..vit_pytorch.vit import ViT
 import pickle
-
+from matplotlib import pyplot as plt
 
 
 def init_seed(opt):
@@ -98,6 +98,40 @@ def save_list_to_file(path, thelist):
             f.write("%s\n" % item)
 
 
+def plot_and_save_curves(train_loss, val_loss, train_acc, val_acc, exp_root):
+    """
+    Plots training & validation loss and accuracy curves, then saves the figure.
+    """
+    epochs = range(1, len(train_loss) + 1)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    # --- Plot Loss Curve ---
+    ax1.plot(epochs, train_loss, 'bo-', label='Training Loss')
+    ax1.plot(epochs, val_loss, 'ro-', label='Validation Loss')
+    ax1.set_title('Training and Validation Loss')
+    ax1.set_xlabel('Epochs')
+    ax1.set_ylabel('Loss')
+    ax1.legend()
+    ax1.grid(True)
+
+    # --- Plot Accuracy Curve ---
+    ax2.plot(epochs, train_acc, 'bo-', label='Training Accuracy')
+    ax2.plot(epochs, val_acc, 'ro-', label='Validation Accuracy')
+    ax2.set_title('Training and Validation Accuracy')
+    ax2.set_xlabel('Epochs')
+    ax2.set_ylabel('Accuracy')
+    ax2.legend()
+    ax2.grid(True)
+
+    plt.tight_layout()
+    # Save the figure
+    plot_path = os.path.join(exp_root, "training_curves.png")
+    plt.savefig(plot_path)
+    print(f"📈 Saved training curves to {plot_path}")
+    plt.close()
+
+
 def get_support_set(n_sample, data_dir):
     support_set = []
     labels = []
@@ -139,8 +173,9 @@ def get_support_set_per_patient(n_sample, data_dir, patient_ids):
 
         for label, class_support_set in enumerate([file_lists['bckg'], file_lists['seiz']]):
             for filename in np.random.permutation(class_support_set)[:n_sample]:
-                filepath = os.path.join(data_dir + "/task-binary_datatype-eval_STFT/",
-                                        filename)
+                # filepath = os.path.join(data_dir + "/task-binary_datatype-eval_STFT/",
+                #                         filename)
+                filepath = filename
                 with open(filepath, 'rb') as f:
                     data_pkl = pickle.load(f)
                     signals = np.asarray(data_pkl['STFT'])
@@ -222,14 +257,15 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
         # torch.save(model.state_dict(), os.path.join(model_path, "epoch{}.pth".format(epoch)))
         if val_dataloader is None:
             continue
-        # auc = test(opt, val_dataloader, model, print_results=False, return_results=True)
-        # postfix = ' (Best)' if auc >= best_auc else ' (Best: {})'.format(
-        #     best_auc)
-        # print('Val auc: {}{}'.format(auc, postfix))
-        # if auc >= best_auc:
-        #     torch.save(model.state_dict(), best_model_path)
-        #     best_auc = auc
-        #     best_state = model.state_dict()
+        auc = test(opt, val_dataloader, model, print_results=False, return_results=True)
+        postfix = ' (Best)' if auc >= best_auc else ' (Best: {})'.format(
+            best_auc)
+        print('Val auc: {}{}'.format(auc, postfix))
+        if auc >= best_auc:
+            torch.save(model.state_dict(), best_model_path)
+            best_auc = auc
+            best_state = model.state_dict()
+        continue
 
         
         val_iter = iter(val_dataloader)
@@ -278,6 +314,9 @@ def train(opt, tr_dataloader, model, optim, lr_scheduler, val_dataloader=None, e
     for name in ['train_loss_total', 'train_acc_total', 'val_loss_total', 'val_acc_total']:
         save_list_to_file(os.path.join(opt.experiment_root,
                                        name + '.txt'), locals()[name])
+        
+    # plot_and_save_curves(train_loss_total, val_loss_total, train_acc_total, val_acc_total, exp_root)
+
 
     return best_state, best_acc, train_loss_total, train_acc_total, val_loss_total, val_acc_total
 
@@ -332,7 +371,8 @@ def test(opt, test_dataloader, model, print_results=False, return_results=False)
         "patients": opt.patients,
         "finetune_patients": opt.finetune_patients,
         "excluded_patients": opt.excluded_patients,
-        "auc": roc_auc_score(true_label, predict_prob)
+        "auc": roc_auc_score(true_label, predict_prob),
+        "snr": opt.snr,
     }
 
     if print_results:
@@ -346,7 +386,8 @@ def test(opt, test_dataloader, model, print_results=False, return_results=False)
     result_df = pd.DataFrame([results])
 
     # Save results to a JSON file
-    output_filename = "../output/results/results_with_validation.csv"
+    # output_filename = "../output/results/results_with_validation.csv"
+    output_filename = os.path.join(opt.experiment_root, 'results.csv')
 
     # Check if the file exists
     try:
@@ -374,7 +415,8 @@ def eval(options):
     test_patient_ids = [p for p in all_patients if p not in options.excluded_patients]
     test_dataloader = get_data_loader_siena(batch_size=options.num_query_val,
                                             patient_ids=test_patient_ids,
-                                            save_dir=options.siena_data_dir)
+                                            save_dir=options.siena_data_dir,
+                                            snr_db=options.snr)
     model = init_vit(options)
     if options.skip_finetune:
         exp_root = options.base_learner_root
@@ -457,9 +499,12 @@ if __name__ == '__main__':
     options = get_parser().parse_args()
     if torch.cuda.is_available() and not options.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-    main()
 
-    # if options.finetune:
-    #     finetune(options)
-    # else:
-    #     eval(options)
+    if options.finetune:
+        finetune(options)
+    elif options.eval:
+        eval(options)
+    elif options.train:
+        main()
+    else:
+        print("One options should be chosen.")

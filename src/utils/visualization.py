@@ -2,15 +2,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import os
-from few_shot_train import init_vit
+from ..experiments.few_shot_train import init_vit
 import matplotlib.pyplot as plt
-from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
+from ..few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, f1_score
 import time
 from tqdm import tqdm
-from few_shot_train import get_support_set_per_patient, init_seed
-from dataset import get_data_loader_siena
-from utils.parser_util import get_parser
+from ..experiments.few_shot_train import get_support_set_per_patient, init_seed
+from ..dataset import get_data_loader_siena
+from .parser_util import get_parser
 from sklearn.decomposition import PCA
 
 
@@ -132,9 +132,9 @@ def test(opt, test_dataloader, train_loader, model, print_results=False, target_
 def get_trained_model(epoch):
     exp_root = os.path.join(options.experiment_root, '_'.join(str(v) for v in options.finetune_patients))
     if epoch == -1:
-        model_path = os.path.join('../', exp_root, 'best_model.pth'.format(epoch))
+        model_path = os.path.join(exp_root, 'best_model.pth'.format(epoch))
     else:
-        model_path = os.path.join('../', exp_root, 'epoch{}.pth'.format(epoch))
+        model_path = os.path.join(exp_root, 'epoch{}.pth'.format(epoch))
     model = init_vit(options)
     model.load_state_dict(torch.load(model_path))
     return model
