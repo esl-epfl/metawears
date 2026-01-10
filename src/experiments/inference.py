@@ -19,11 +19,11 @@ from scipy.signal import stft
 from tqdm import tqdm
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-from dataset import TUHDataset, get_data_loader_siena
+from ..dataset import TUHDataset, get_data_loader_siena
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 from sklearn.metrics import confusion_matrix
-from utils.utils import thresh_max_f1
+from ..utils.utils import thresh_max_f1
 
 
 def seed_everything(seed=99):
@@ -39,8 +39,11 @@ def seed_everything(seed=99):
 seed_everything(seed=99)
 
 
+# Get the project root directory
+PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
 def test_sample_base():
-    data_directory = '/home/amirshah/EPFL/EpilepsyTransformer/input/Siena/'
+    data_directory = os.path.join(PROJ_ROOT, 'input', 'Siena')
     test_loader = get_data_loader_siena(32, data_directory)
 
     test_label_all = []
@@ -75,7 +78,7 @@ device = 'cuda:0'
 # device = 'cpu'
 
 # model = torch.load('inference_ck_0.9208', map_location=torch.device(device))
-root_path = '/home/amirshah/EPFL/EpilepsyTransformer/TUSZv2/preprocess'
+root_path = os.path.join(PROJ_ROOT, 'output', 'TUSZv2', 'preprocess')
 model_path = os.path.join(root_path, 'test_STFT/test_model_21_0.9274234153874015')
 
 model = torch.load(model_path,  map_location=torch.device(device))

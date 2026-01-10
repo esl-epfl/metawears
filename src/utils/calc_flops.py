@@ -1,7 +1,7 @@
 import torch
 from calflops import calculate_flops
-from vit_pytorch.vit import ViT
-from utils.AF_mobilenet import create_mobilenet_1d
+from ..vit_pytorch.vit import ViT
+from .AF_mobilenet import create_mobilenet_1d
 
 
 

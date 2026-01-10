@@ -2,13 +2,19 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import seaborn as sns
 from scipy.stats import ttest_1samp
+import os
 
+# Get the project root directory, which is two levels up from the current script's location
+PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 try:
+    # Define the full paths to the CSV files using the project root
+    proposed_csv_path = os.path.join(PROJ_ROOT, 'output_metawears', 'results_proposed.csv')
+    maml_csv_path = os.path.join(PROJ_ROOT, 'output', 'results_MAML.csv')
+
     # Load the two CSV files into pandas DataFrames
-    # Assumes the CSV files are in the same directory as the script
-    proposed_df = pd.read_csv('./output_metawears/results_proposed.csv')
-    maml_df = pd.read_csv('./output/results_MAML.csv')
+    proposed_df = pd.read_csv(proposed_csv_path)
+    maml_df = pd.read_csv(maml_csv_path)
 
     # Ensure the DataFrames have the same number of rows before proceeding
     if len(proposed_df) != len(maml_df):
@@ -101,6 +107,6 @@ try:
 
 
 except FileNotFoundError as e:
-    print(f"Error: Make sure the file '{e.filename}' is in the same directory as the script.")
+    print(f"Error: Make sure the file '{e.filename}' is present at the expected location.")
 except Exception as e:
     print(f"An error occurred: {e}")

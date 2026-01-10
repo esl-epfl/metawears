@@ -8,21 +8,21 @@ def get_parser():
     parser.add_argument('-root', '--dataset_root',
                         type=str,
                         help='path to dataset',
-                        default='..' + os.sep + 'dataset')
+                        default='dataset')
 
     parser.add_argument('-tusz_data', '--TUSZ_data_dir',
                         type=str,
-                        default='/home/alireza/EPFL/papers')
+                        default='input/TUSZ')
 
     parser.add_argument('-exp', '--experiment_root',
                         type=str,
                         help='root where to store models, losses and accuracies',
-                        default='../output' + os.sep + 'with_validation')
+                        default=os.path.join('output', 'with_validation'))
 
     parser.add_argument('-baselearner', '--base_learner_root',
                         type=str,
                         help='root where to load pre-trained models',
-                        default='../output' + os.sep + 'with_validation')
+                        default=os.path.join('output', 'with_validation'))
 
     parser.add_argument('--finetune', action='store_true', help='enables global model')
     parser.add_argument('--skip_base_learner', action='store_true', help='meta-train on Siena from scratch')
@@ -31,7 +31,7 @@ def get_parser():
     parser.add_argument('-data_root', '--data_root',
                         type=str,
                         help='root where the input data is stored',
-                        default='/home/amirshah/EPFL/EpilepsyTransformer/TUSZv2/preprocess')
+                        default=os.path.join('input', 'TUSZv2_preprocessed'))
 
     parser.add_argument('-nep', '--epochs',
                         type=int,
@@ -124,9 +124,9 @@ def get_parser():
 
     parser.add_argument('--sample_rate', type=int, default=256)
     # parser.add_argument('--data_directory', type=str, default='/home/amirshah/EPFL/TUSZv2')
-    parser.add_argument('--siena_raw_data_directory', type=str, default='/home/amirshah/EPFL/physionet.org/files/siena-scalp-eeg/1.0.0')
+    parser.add_argument('--siena_raw_data_directory', type=str, default=os.path.join('input', 'siena_raw'))
     parser.add_argument('--siena_data_dir', type=str,
-                        default='/home/amirshah/EPFL/EpilepsyTransformer/input/Siena')
+                        default=os.path.join('input', 'Siena'))
     parser.add_argument('--label_type', type=str, default='csv_bi')
     parser.add_argument('--cpu_num', type=int, default=4)
     parser.add_argument('--data_type', type=str, default='eval', choices=['train', 'eval', 'dev'])

@@ -7,14 +7,14 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, message="Failed to load image Python extension")
 # TODO solve the CUDA version issue
 
-from few_shot.prototypical_batch_sampler import PrototypicalBatchSampler
-from few_shot.prototypical_loss import prototypical_loss as loss_fn
-from few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
-from utils.parser_util import get_parser
-from dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
-from few_shot.support_set_const import seizure_support_set, non_seizure_support_set
-from few_shot.support_set_const import seizure_support_set_siena, non_seizure_support_set_siena
-from utils.utils import thresh_max_f1
+from ..few_shot.prototypical_batch_sampler import PrototypicalBatchSampler
+from ..few_shot.prototypical_loss import prototypical_loss as loss_fn
+from ..few_shot.prototypical_loss import get_prototypes, prototypical_evaluation, prototypical_evaluation_per_patient
+from ..utils.parser_util import get_parser
+from ..dataset import get_data_loader, get_data_loader_siena, get_data_loader_siena_finetune
+from ..few_shot.support_set_const import seizure_support_set, non_seizure_support_set
+from ..few_shot.support_set_const import seizure_support_set_siena, non_seizure_support_set_siena
+from ..utils.utils import thresh_max_f1
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, f1_score
 
 from tqdm import tqdm
@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import torch
 import os
-from vit_pytorch.vit import ViT
+from ..vit_pytorch.vit import ViT
 import pickle
 from matplotlib import pyplot as plt
 

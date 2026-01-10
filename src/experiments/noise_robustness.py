@@ -3,6 +3,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import ast
+import os
+
+# Get the project root directory
+PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 def create_experiment_group_key(df):
     """
@@ -42,7 +46,7 @@ def create_experiment_group_key(df):
 
 # --- 1. Load and Prepare the Data ---
 try:
-    df = pd.read_csv('./output_metawears/results_noisy.csv')
+    df = pd.read_csv(os.path.join(PROJ_ROOT, 'output_metawears', 'results_noisy.csv'))
 except FileNotFoundError:
     print("Error: 'results_noisy.csv' not found. Please ensure the file is in the correct directory.")
     exit()
@@ -105,3 +109,6 @@ plt.tight_layout()
 
 # Show the plot
 plt.show()
+
+# save the degradation stats in a csv file
+degradation_stats.to_csv(os.path.join(PROJ_ROOT, 'output_metawears', 'degradation_stats.csv'), index=False)
